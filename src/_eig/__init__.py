@@ -1,46 +1,30 @@
 import torch
+import warnings
 
-from .eig_2x2 import eigh2, eig_su2
-from .eig_3x3 import eigh3, eig_su3
-from .eig_3x3 import eigvalsh3, eigvals_su3
-from .eigu import eigu
+from .eig_2x2 import eigh2, eigsu2
+from .eigh_3x3 import eigvalsh3, eigh3
+from .eigsu_3x3 import eigvalssu3, eigsu3
+
+from . import generic
 
 
-def eigvalsh(matrix):
+def eigsu(matrix, **kwargs):
     if matrix.shape[-1] == 2:
-        func = eigvalsh2
+        func = eigsu2
     elif matrix.shape[-1] == 3:
-        func = eigvalsh3
+        func = eigsu3
     else:
-        func = torch.linalg.eigvalsh
-    return fucn(matrix)
-
-
-def eigvals_su(matrix):
-    if matrix.shape[-1] == 2:
-        func = eigvals_su2
-    elif matrix.shape[-1] == 3:
-        func = eigvals_su3
-    else:
-        raise Exception("Not implemented")
-    return fucn(matrix)
-
-
-def eig_su(matrix):
-    if matrix.shape[-1] == 2:
-        func = eig_su2
-    elif matrix.shape[-1] == 3:
-        func = eigh_su3
-    else:
+        warnings.warn("The implementation uses torch.linalg.eigh")
         func = eigu
-    return fucn(matrix)
+    return func(matrix, **kwargs)
 
 
-def eigh(matrix):
+def eigh(matrix, **kwargs):
     if matrix.shape[-1] == 2:
         func = eigh2
     elif matrix.shape[-1] == 3:
         func = eigh3
     else:
+        warnings.warn("Using torch.linalg.eigh")
         func = torch.linalg.eigh
-    return fucn(matrix)
+    return func(matrix, **kwargs)

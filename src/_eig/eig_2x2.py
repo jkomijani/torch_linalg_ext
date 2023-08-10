@@ -36,6 +36,7 @@ def eigh2(matrix):
     t = (a + b) * (1/2.)
     z = a - t
     r = (z**2 + x**2 + y**2)**0.5
+    # Note that r >= |z|, thus r - z >= 0
 
     eigvals = torch.stack([t - r, t + r], dim=-1)
 
@@ -44,7 +45,7 @@ def eigh2(matrix):
             [z - r, x - y*1j, x + y*1j, r - z], dim=-1
             ).reshape(*matrix.shape) / vec_norm**0.5
 
-    # if vec_norm ==0, then eigvecs = eye(2)
+    # if vec_norm == 0, then eigvecs = eye(2)
     cond = vec_norm.ravel() == 0
     eigvecs_ = eigvecs.reshape(-1, 2, 2)
     eigvecs_[cond] = torch.eye(2).reshape(-1, 2, 2).repeat(sum(cond), 1, 1) +0j
@@ -53,7 +54,7 @@ def eigh2(matrix):
 
 
 # =============================================================================
-def eig_su2(matrix):
+def eigsu2(matrix):
     """
     Return eigenvalues and eigenvectors of 2x2 special unitary matrices using
     closed form expressions.
@@ -66,7 +67,7 @@ def eig_su2(matrix):
              [i x - y,   t - i z]]
 
     where the deteriminant, i.e., :math:`t^2 + x^2 + y^2 + z^2` is unity.
-    (Here we overlook if the deteriminat is in fact unity.)
+    (Here we do not check whether the determinat is in fact unity.)
     Then the eigenvalues are :math:`(t - i r, t + i r)` where
     :math:`r = \sqrt{x^2 + y^2 + z^2}` and the matrix of eigenvectors is
 
@@ -84,6 +85,7 @@ def eig_su2(matrix):
     y = torch.real(matrix[..., 0, 1])
 
     r = (z**2 + x**2 + y**2)**0.5
+    # Note that r >= |z|, thus r - z >= 0
 
     eigvals = torch.stack([t - r * 1j, t + r * 1j], dim=-1)
 
@@ -92,7 +94,7 @@ def eig_su2(matrix):
             [z - r, x - y*1j, x + y*1j, r - z], dim=-1
             ).reshape(*matrix.shape) / vec_norm**0.5
 
-    # if vec_norm ==0, then eigvecs = eye(2)
+    # if vec_norm == 0, then eigvecs = eye(2)
     cond = vec_norm.ravel() == 0
     eigvecs_ = eigvecs.reshape(-1, 2, 2)
     eigvecs_[cond] = torch.eye(2).reshape(-1, 2, 2).repeat(sum(cond), 1, 1) +0j

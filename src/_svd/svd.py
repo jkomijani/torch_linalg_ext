@@ -16,11 +16,33 @@ class AttributeDict:
 
 
 def svd(matrix):
+    """Return singular value decomposition of the input matrix.
+
+    As torch.linalg.svd, we can only return (u, s, vh), but we also return
+
+    .. math::
+
+         (U @ V^\dagger) * phase
+
+    where phase is constructed such that the matrix turns to SU(n). We call
+    this matrix `sUVh`. We also return determinant of `(U @ V^\dagger)`.
+    """
+    # First obtain S^2 and U
     s_sq, u = eigh(matrix @ matrix.adjoint())
+
+    # V can be obtained by multiplying S^{-1} U^\dagger and matrix
+    # The method fails if S^{-1} diverges
+
     s = torch.sqrt(s_sq)
-    uvh = torch.matmul(u, s.unsqueeze(-1) * u.adjoint()) @ matrix
-    vh = u.adjoint() @ uvh
-    return AttributeDict(U=u, S=s, Vh=vh, UVh=uvh)
+
+    vh = ((1 / s).unsqueeze(-1) * u.adjoint()) @ matrix
+
+    # To do, if s==0, one can perform qr decomposition on matrix.adjoint() @ u
+
+    uvh = u @ vh
+    det_uvh = torch.det(uvh)
+    uvh[..., 0] = uvh[..., 0] * det_uvh.unsqueeze(-1)  # change only 1st column
+    return AttributeDict(U=u, S=s, Vh=vh, det_uvh=det_uvh, sUVh=uvh)
 
 
 def svd_su2(x):

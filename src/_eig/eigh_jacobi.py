@@ -3,10 +3,12 @@
 import torch
 import warnings
 
-from .generic import sort_eig, fix_phase
+from .generic import sort_eig, fix_phase, get_default_tolerance
 
 
-def jacobi_diagonalization(A, max_iterations=100, tolerance=1e-14):
+def jacobi_diagonalization(A,
+        max_iterations=100, tol=None, print_details=False
+        ):
     r"""
     The Jacobi method is a method for the diagonalization of a hermitian matrix
     :math:`A`. It is an iterative method that uses unitary transformations
@@ -25,7 +27,9 @@ def jacobi_diagonalization(A, max_iterations=100, tolerance=1e-14):
     The indices :math:`(p, q)` are chosen such that :math:`|A[p, q]|`
     is the largest off-diagonal element.
     """
-    
+    if tol is None:
+        tol = get_default_tolerance()
+
     assert A.shape[-2] == A.shape[-1], "A must be square"
 
     is_complex = torch.is_complex(A.ravel()[0])
@@ -43,7 +47,7 @@ def jacobi_diagonalization(A, max_iterations=100, tolerance=1e-14):
         off_diag_max, ind = torch.max(torch.abs(A_new - A_diag).reshape(-1, n**2), dim=-1)
         
         # Break if largest off diagonal term is alread small
-        if torch.sum(off_diag_max) < tolerance:
+        if torch.max(off_diag_max) < tol:
             break
                     
         p, q = ind // n, ind % n
@@ -88,7 +92,9 @@ def jacobi_diagonalization(A, max_iterations=100, tolerance=1e-14):
         P = P @ J
     else:
         warnings.warn("Reached max_iterations in jacobi_diagonalization")
-    
+
+    if print_details:
+        print(f"jacobi converged off_diag_max = {off_diag_max}, k_iter = {k_iteration}")
     eigvals = torch.diagonal(A_new, dim1=-2, dim2=-1).real
     eigvecs = P
 
