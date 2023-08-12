@@ -31,7 +31,7 @@ def fix_phase(eigvecs, max_row=True, firs_row=False):
     """Fix the arbitrary phase of each eigenvector.
 
     When `max_row` is True, for each eigenvector, the element with largest
-    absolute value is changed to becomes real.
+    absolute value is changed to become real.
 
     For a behavior similar to pytorch set `max_row = False, first_row = True`.
     """
