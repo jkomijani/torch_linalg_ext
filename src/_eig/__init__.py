@@ -1,12 +1,17 @@
 import torch
 import warnings
 
-from .eig_2x2 import eigh2, eigsu2
-from .eigh_3x3 import eigvalsh3, eigh3
-from .eigsu_3x3 import eigvalssu3, eigsu3
-
+from . import _autograd
 from . import generic
 
+eigh2 = _autograd.Eigh2.apply
+eigh3 = _autograd.Eigh3.apply
+eigsu2 = _autograd.Eigsu2.apply
+eigsu3 = _autograd.Eigsu3.apply
+eigvalsh3 = _autograd.Eigvalsh3.apply
+eigvalssu3 = _autograd.Eigvalssu3.apply
+
+reverse_eig = _autograd.ReverseEig.apply
 
 def eigsu(matrix, **kwargs):
     if matrix.shape[-1] == 2:
