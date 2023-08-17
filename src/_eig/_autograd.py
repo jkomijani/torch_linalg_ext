@@ -15,6 +15,7 @@ from .eig_2x2 import eigh2, eigsu2
 from .eigh_3x3 import eigvalsh3, eigh3
 from .eigsu_3x3 import eigvalssu3, eigsu3
 
+from .eigsu_3x3 import eigu3_from_h as eigsu3
 
 EPS_EIGH = 1e-16
 
