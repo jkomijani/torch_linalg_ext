@@ -45,7 +45,7 @@ def svd(matrix):
 
     uvh = u @ vh
     det_uvh = torch.det(uvh)
-    uvh[..., 0] = uvh[..., 0] * det_uvh.unsqueeze(-1)  # change only 1st column
+    uvh[..., 0] = uvh[..., 0] / det_uvh.unsqueeze(-1)  # change only 1st column
     return AttributeDict(U=u, S=s, Vh=vh, det_uvh=det_uvh, sUVh=uvh)
 
 
@@ -61,7 +61,7 @@ def svd_for_su2sums(matrix):
     vh[..., 1, 1] = 1.
     uvh = u @ vh
     det_uvh = torch.det(uvh)
-    uvh[..., 0] = uvh[..., 0] * det_uvh.unsqueeze(-1)  # change only 1st column
+    uvh[..., 0] = uvh[..., 0] / det_uvh.unsqueeze(-1)  # change only 1st column
     s = torch.cat([s, s], dim=-1)
     return AttributeDict(U=u, S=s, Vh=vh, det_uvh=det_uvh, sUVh=uvh)
 
