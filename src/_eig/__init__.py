@@ -13,6 +13,7 @@ eigvalssu3 = _autograd.Eigvalssu3.apply
 
 reverse_eig = _autograd.ReverseEig.apply
 
+
 def eigsu(matrix, **kwargs):
     if matrix.shape[-1] == 2:
         func = eigsu2
