@@ -16,7 +16,7 @@ class AttributeDict:
 
 
 def svd(matrix):
-    """Return singular value decomposition of the input complex matrix.
+    """Return singular value decomposition of the input complex, square matrix.
 
     As torch.linalg.svd, we can only return (u, s, vh), but we also return
 
@@ -34,19 +34,21 @@ def svd(matrix):
     s = torch.sqrt(s_sq)
     vh = ((1 / s).unsqueeze(-1) * u.adjoint()) @ matrix
 
+    n = matrix.shape[-1]
+
     # The method fails if S^{-1} diverges, which will be taken care separately.
     cond = torch.sum(s_sq <= 0, dim=-1).ravel()
     if torch.sum(cond) > 0:
-        n1, n2 = matrix.shape[-2:]
-        vh.view(-1, n2, n2)[cond] = singular_svd(
-                matrix.view(-1, n1, n2)[cond],
-                u.view(-1, n1, n1)[cond],
+        # This manipulation does not support backward automatic differentiation
+        vh.view(-1, n, n)[cond] = singular_svd(
+                matrix.view(-1, n, n)[cond],
+                u.view(-1, n, n)[cond],
                 )
 
-    uvh = u @ vh
-    det_uvh = torch.det(uvh)
-    uvh[..., 0] = uvh[..., 0] / det_uvh.unsqueeze(-1)  # change only 1st column
-    return AttributeDict(U=u, S=s, Vh=vh, det_uvh=det_uvh, sUVh=uvh)
+    det = torch.det(matrix)
+    det = det / det.abs()  # this is det of U V^\dagger
+    det_root = det.reshape(*det.shape, 1, 1)**(1/n)
+    return AttributeDict(U=u, S=s, Vh=vh, det_uvh=det, sUVh=u @ vh / det_root)
 
 
 def svd_for_su2sums(matrix):
