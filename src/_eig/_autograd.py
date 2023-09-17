@@ -10,12 +10,15 @@ for forward and reverse mode algorithmic differentiation."
 """
 
 import torch
+import warnings
 
 from .eig_2x2 import eigh2, eigsu2
 from .eigh_3x3 import eigvalsh3, eigh3
 from .eigsu_3x3 import eigvalssu3, eigsu3
 
 from .eigsu_3x3 import eigu3_from_h as eigsu3
+
+TOL = 1e-12
 
 
 # =============================================================================
@@ -44,15 +47,20 @@ class Eig(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_u, grad_v):
-        # grad_? denotes derivative of a scalar output wrt each element of '?'
+        # grad_{u & v} denotes derivatives of a scalar output w.r.t. each
+        # element of {u & v}
         u, v = ctx.saved_tensors
         nabla = calc_nabla(u)
-        grad_u = torch.diag_embed(grad_u)  # for matrix operations
         vh_grad_v = v.adjoint() @ grad_v
-        # check the imaginary part of diagonal elements of vh_grad_v
-        # and pass a warning if they are not close to zero.
-        # warnings.warn("derivative w.r.t. the arbitrary phase is not zero")
+
+        # check if the imaginary part of diagonal elements of vh_grad_v is 0
+        cond = torch.diagonal(vh_grad_v.imag, dim1=-2, dim2=-1).abs() > TOL
+        if torch.sum(cond):
+            warnings.warn("EIG: Derivative wrt the arbitrary phase isn't zero")
+
+        grad_u = torch.diag_embed(grad_u)  # for matrix operations
         grad_matrix = v @ (grad_u + nabla.conj() * vh_grad_v) @ v.adjoint()
+
         return grad_matrix
 
 
@@ -68,7 +76,7 @@ class Eigh(Eig):
     @staticmethod
     def backward(ctx, grad_u, grad_v):
         grad_matrix = Eig.backward(ctx, grad_u, grad_v)
-        return (grad_matrix + grad_matrix.adjoint())/2
+        return (grad_matrix + grad_matrix.adjoint()) / 2
 
 
 class Eigh2(Eigh):
@@ -94,18 +102,23 @@ class Eigu(Eig):
 
     @staticmethod
     def backward(ctx, grad_u, grad_v):
-        # grad_? denotes derivative of a scalar output wrt each element of '?'
+        # grad_{u & v} denotes derivatives of a scalar output w.r.t. each
+        # element of {u & v}
         u, v = ctx.saved_tensors
-        nabla = calc_nabla(u.real) + 1j * calc_nabla(u.imag)
-        grad_u = torch.diag_embed(grad_u)  # for matrix operations
+        nabla = calc_nabla(u)
         vh_grad_v = v.adjoint() @ grad_v
-        # check the imaginary part of diagonal elements of vh_grad_v
-        # and pass a warning if they are not close to zero.
-        # warnings.warn("derivative w.r.t. the arbitrary phase is not zero")
-        grad_matrix = \
-            v \
-            @ (grad_u + nabla * (-vh_grad_v.adjoint() + vh_grad_v)/2) \
-            @ v.adjoint()
+
+        # check if the imaginary part of diagonal elements of vh_grad_v is 0
+        cond = torch.diagonal(vh_grad_v.imag, dim1=-2, dim2=-1).abs() > TOL
+        if torch.sum(cond):
+            warnings.warn("EIG: Derivative wrt the arbitrary phase isn't zero")
+
+        vh_grad_v = (vh_grad_v - vh_grad_v.adjoint()) / 2
+        grad_u = (grad_u - u * grad_u.conj() * u) / 2
+
+        grad_u = torch.diag_embed(grad_u)  # for matrix operations
+        grad_matrix = v @ (grad_u + nabla.conj() * vh_grad_v) @ v.adjoint()
+
         return grad_matrix
 
 
@@ -152,9 +165,9 @@ class Eigvals(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, matrix):
-        u, v = eig(matrix)
+        u, v = torch.lianlg.eig(matrix)
         ctx.save_for_backward(u, v)
-        return u, v
+        return u
 
     @staticmethod
     def backward(ctx, grad_u):
@@ -169,7 +182,7 @@ class Eigvalsh3(Eigvals):
     def forward(ctx, matrix):
         u, v = eigh3(matrix)
         ctx.save_for_backward(u, v)
-        return u, v
+        return u
 
 
 class Eigvalssu3(Eigvals):
@@ -178,7 +191,7 @@ class Eigvalssu3(Eigvals):
     def forward(ctx, matrix):
         u, v = eigsu3(matrix)
         ctx.save_for_backward(u, v)
-        return u, v
+        return u
 
 
 # =============================================================================
@@ -198,22 +211,24 @@ class ReverseEig(torch.autograd.Function):
         u, v = ctx.saved_tensors
         grad_matrix = v.adjoint() @ grad_matrix @ v  # new definiton
         grad_u = torch.diagonal(grad_matrix, dim1=-1, dim2=-2)
-        diff = calc_eig_diff(u)
-        grad_v = v @ (diff * grad_matrix)
+        delta = calc_eig_delta(u)
+        grad_v = v @ (delta * grad_matrix)
         return grad_u, grad_v
 
 
 # =============================================================================
-def calc_eig_diff(u):
+def calc_eig_delta(u):
     """u is the list of eigenvalues"""
     n = u.shape[-1]
-    diff = u.view(-1, 1, n).repeat(1, n, 1) - u.view(-1, n, 1).repeat(1, 1, n)
-    return diff.view(*u.shape[:-1], n, n)
+    delta = u.view(-1, 1, n).repeat(1, n, 1) - u.view(-1, n, 1).repeat(1, 1, n)
+    return delta.view(*u.shape[:-1], n, n)
 
 
 def calc_nabla(u):
     """u is the list of eigenvalues"""
-    delta = calc_eig_diff(u)
+    n = u.shape[-1]
+    delta = u.view(-1, 1, n).repeat(1, n, 1) - u.view(-1, n, 1).repeat(1, 1, n)
+    delta = delta.view(*u.shape[:-1], n, n)
     nabla = 1 / delta
     nabla[ delta == 0 ] = 0
     return nabla
