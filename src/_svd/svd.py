@@ -15,10 +15,21 @@ class AttributeDict:
         return str(self.__dict__)
 
 
-def svd(matrix):
+def svd(matrix, include_suvd=False):
     """Return singular value decomposition of the input complex, square matrix.
 
-    As torch.linalg.svd, we can only return (u, s, vh), but we also return
+    The singular value decomposition of matrix :math:`M` is
+
+    .. math::
+
+         M = U S V^\dagger
+
+    If :math:`S^{-1}` exists, then :math:`U V^\dagger` is unique, otherwise
+    it is not.
+
+    As torch.linalg.svd, we can only return (u, s, vh), but there is an option
+    to return more quantities.
+    To this end, set `include_suvd=True` to also have we also return
 
     .. math::
 
@@ -32,23 +43,89 @@ def svd(matrix):
 
     # V can be obtained by multiplying S^{-1} U^\dagger and matrix
     s = torch.sqrt(s_sq)
+    s[ s_sq < 0 ] = 0  # to remove possible roundoff error
+
     vh = ((1 / s).unsqueeze(-1) * u.adjoint()) @ matrix
 
-    n = matrix.shape[-1]
-
     # The method fails if S^{-1} diverges, which will be taken care separately.
-    cond = torch.sum(s_sq <= 0, dim=-1).ravel()
+    cond = torch.sum(s == 0, dim=-1).ravel()
     if torch.sum(cond) > 0:
-        # This manipulation does not support backward automatic differentiation
-        vh.view(-1, n, n)[cond] = singular_svd(
-                matrix.view(-1, n, n)[cond],
-                u.view(-1, n, n)[cond],
-                )
+        n = matrix.shape[-1]
+        vh.view(-1, n, n)[cond] = slow_svd(matrix.view(-1, n, n)[cond])
 
-    det = torch.det(matrix)
-    det = det / det.abs()  # this is det of U V^\dagger
-    det_root = det.reshape(*det.shape, 1, 1)**(1/n)
-    return AttributeDict(U=u, S=s, Vh=vh, det_uvh=det, sUVh=u @ vh / det_root)
+    if calc_suvd:
+        return append_suvd(AttributeDict(U=u, S=s, Vh=vh))
+    else:
+        return AttributeDict(U=u, S=s, Vh=vh)
+
+
+def slow_svd(matrix, include_suvd=False):
+    """Return singular value decomposition of the input complex, square matrix.
+
+    The singular value decomposition of matrix :math:`M` is
+
+    .. math::
+
+         M = U S V^\dagger
+
+    If :math:`S^{-1}` exists, then :math:`U V^\dagger` is unique, otherwise
+    it is not.
+    We explain it now. let us introduce unitary matrices :math:`D_u` and
+    :math:`D_v` that satisfy :math:`[D_u, S] = [D_v, S] = 0`.
+    Then, one can show that
+
+    .. math::
+
+         M = (U D_u) S (V D_v)^\dagger
+
+    is another valid decomposition only if :math:`S D_u D_v^\dagger = S`.
+    When :math:`S` is invertible, the condition inidcates :math:`D_u = D_v`.
+    This then implies that
+
+    .. math::
+
+        U V^\dagger
+
+    is unique. If some elements of :math:`S` are zero, the above constraint
+    does not fully relate :math:`D_v` to :math:`D_u` and :math:`U V^\dagger` is
+    not unique anymore. We use a particular presciption to handle this
+    situation.
+    """
+    s_sq, u = eigh(matrix @ matrix.adjoint())
+    _, v = eigh(matrix.adjoint() @ matrix)
+
+    s_times_d = u.adjoint() @ matrix @ v  # S D
+
+    # we shoud find D and then vh = D @ v.adjoint()
+    # not that D is block diagonal, each block corresponds to a unique singular
+    # value and the block is unitary itself.
+    # we replace the block correspoding to vanishing sigular values to I.
+
+    s = torch.sqrt(s_sq)
+    s[ s_sq < 0 ] = 0  # to remove possible roundoff error
+    inv_s = 1 / s
+    inv_s[ s == 0 ] = 0
+
+    fixer = torch.zeros_like(s)
+    fixer[ s == 0 ] = 1
+
+    d = inv_s.unsqueeze(-1) * s_times_d + torch.diag_embed(fixer)
+
+    vh = d @ v.adjoint()
+
+    if calc_suvd:
+        return append_suvd(AttributeDict(U=u, S=s, Vh=vh))
+    else:
+        return AttributeDict(U=u, S=s, Vh=vh)
+
+
+def append_suvh(svd):
+    """Return a new svd object that includes U V^\dagger"""
+    uvh = svd.U @ svd.Vh
+    det = torch.det(uvh)
+    # we now make determinant of uvh unity:
+    uvh = uvh / det.reshape(*det.shape, 1, 1)**(1 / uvh.shape[-1])
+    return AttributeDict(U=svd.U, S=svd.S, Vh=SVD.vh, det_uvh=det, sUVh=uvh)
 
 
 def svd_for_su2sums(matrix):
@@ -66,7 +143,3 @@ def svd_for_su2sums(matrix):
     uvh[..., 0] = uvh[..., 0] / det_uvh.unsqueeze(-1)  # change only 1st column
     s = torch.cat([s, s], dim=-1)
     return AttributeDict(U=u, S=s, Vh=vh, det_uvh=det_uvh, sUVh=uvh)
-
-
-def singular_svd(args):
-    pass  # NOT READY YET
