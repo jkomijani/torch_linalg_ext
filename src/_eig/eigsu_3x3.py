@@ -7,9 +7,11 @@ from .eigh_3x3 import eigh3, cross_product
 from .eigh_3x3 import nullspace3_from_parallelization
 from .eigh_3x3 import nullspace3_from_cross_product
 
+from .eig_3x3 import eign3x3
+
 
 # =============================================================================
-def eigvalssu3(matrix, return_invariants=False):
+def eigvalssu3x3(matrix, return_invariants=False):
     r"""
     Return eigenvalues of 3x3 special unitary matrices using closed form
     expressions.
@@ -112,12 +114,33 @@ def eigvalssu3(matrix, return_invariants=False):
 
 
 # =============================================================================
+def eigsu3x3(matrix, **kwargs):
+    """
+    Althought this function is special for SU(3) matrices, it is better to
+    avoid it because if the matrix is slightly different from a SU(3) matrix,
+    the eigenvalues become slightly wrong too, which then affects the precision
+    of eigenvectors and the fact that they must be perpendicular for
+    non-degenerate eigenvalues.
+    """
+    return eign3x3(matrix, func_4_eigvals = eigvalssu3x3, **kwargs)
+
+
+# =============================================================================
+eigvalssu3 = eigvalssu3x3
+
+
 def eigsu3(matrix, method='parallelization', eps_mu=1e-6, tol=None):
     """
     Return eigenvalues and eigenvectors of 3x3 special unitary matrices.
 
     The eigenvalues are obtained by calling `eigvalssu3`, which uses a closed
     form expression.
+
+    Althought this function is special for SU(3) matrices, it is better to
+    avoid it because if the matrix is slightly different from a SU(3) matrix,
+    the eigenvalues become slightly wrong too, which then affects the precision
+    of eigenvectors and the fact that they must be perpendicular for
+    non-degenerate eigenvalues.
 
     To calculate the eigenvectors, one can exploit vector cross products in 3
     dimensions as described in [http://arxiv.org/abs/physics/0610206]
@@ -219,11 +242,11 @@ def eigsu3(matrix, method='parallelization', eps_mu=1e-6, tol=None):
 
 # =============================================================================
 def eigu3_from_h(x):
-    r"""Return eigenvalues and eigenvectors of unitary matrices.
+    r"""Return eigenvalues and eigenvectors of unitary matrices via converting
+    them to Hermitian matrices.
 
-    The implementation is with torch.linalg.eigh, which is for hermitian
-    matrices. Using torch.linalg.eig instead of `eigu` seems to accumulate
-    error with large number of layers.
+    The implementation, employing hemitian matrices, does not accumulate errors
+    unlike the regular one.
 
     We use
 
