@@ -6,7 +6,7 @@ from .generic import fix_phase, eyes_like
 
 
 # =============================================================================
-def eigvals3x3(matrix, traceless=False, return_invariants=False):
+def eigvals3x3(matrix, return_invariants=False):
     r"""Return eigenvalues of 3x3 matrices using a closed form expression.
 
     To obtain the eigenvalues, we solve the characteristic equation:
@@ -31,9 +31,6 @@ def eigvals3x3(matrix, traceless=False, return_invariants=False):
     matrix : tensor
         can be a single matrix or a batch of matrices.
 
-    traceless : boolean
-        if True, it means that `matrix` is traceless.
-
     return_invariants : boolean
         in addition to the eigenvalues, return parameters mu, theta and phi;
         see the discription of algorithm below. (Default is False.)
@@ -43,7 +40,7 @@ def eigvals3x3(matrix, traceless=False, return_invariants=False):
 
     # We fist write det(A - s) = - s^3 + 3 b * s^2 + 3 c * s + d
 
-    b = 0 if traceless else torch.mean(matrix.diagonal(dim1=-1, dim2=-2), dim=-1)
+    b = torch.mean(matrix.diagonal(dim1=-1, dim2=-2), dim=-1)
 
     c = (-matrix[..., 0, 0] * matrix[..., 1, 1]
         + matrix[..., 0, 1] * matrix[..., 1, 0]
@@ -184,10 +181,10 @@ def eign3x3(matrix,
         mu = torch.mean(matrix.diagonal(dim1=-1, dim2=-2), dim=-1).unsqueeze(-1)
         matrix = matrix - mu.unsqueeze(-1) * eye
 
-    eigvals = func_4_eigvals(matrix, traceless=subtract_trace)
+    eigvals = func_4_eigvals(matrix)
 
     for k in [0, 2]:
-        # indices = [k % 3, (k + 1) % 3, (k + 2) % 3]
+        # indices = [k % 3, (k + 1) % 3, (k + 2) % 3]  # good for cross-product
         indices = [(k + 1) % 3, (k + 2) % 3, k % 3]
         eigval = eigvals[..., k:k+1].unsqueeze(-1)
         eigvecs[..., k] = func_4_nullspace(
