@@ -100,3 +100,10 @@ def eigsu2(matrix):
     eigvecs_[cond] = torch.eye(2).reshape(-1, 2, 2).repeat(sum(cond), 1, 1) +0j
 
     return eigvals, eigvecs
+
+
+# =============================================================================
+def eigu2(matrix):
+    root_det = torch.det(matrix).reshape(*matrix.shape, 1, 1)**0.5
+    u, v = eigsu2(matrix / root_det)
+    return root_det * u, v
