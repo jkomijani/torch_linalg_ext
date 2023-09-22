@@ -6,10 +6,11 @@ import numpy as np
 
 from .generic import fix_phase, eyes_like, get_default_tolerance
 from .eigh_jacobi import jacobi_diagonalization
+from .eig_3x3 import eign3x3
 
 
 # =============================================================================
-def eigvalsh3(matrix, return_invariants=False):
+def eigvalsh3x3(matrix, return_invariants=False):
     r"""
     Return eigenvalues of 3x3 hermitian matrices using closed form expressions.
 
@@ -22,22 +23,11 @@ def eigvalsh3(matrix, return_invariants=False):
         upper diagonal terms.
 
     return_invariants : boolean
-       in addition to the eigenvalues, return parameters mu, theta and phi;
-       see the discription of algorithm below.
-       (Default is False.)
+        in addition to the eigenvalues, return parameters mu, theta and phi;
+        see the discription of algorithm below. (Default is False.)
     
-    The algorithm that we use is very common and can be used for any
-    :math:`3\times 3` matrix; e.g., see,
-    https://hal.science/hal-01501221v1/preview/matrix_exp_and_log_formula.pdf,
-    "Efficient numerical diagonalization of hermitian 3x3 matrices"
-    [http://arxiv.org/abs/physics/0610206],
-    and
-    "Symbolic spectral decomposition of 3x3 matrices"
-    [https://arxiv.org/abs/2111.02117].
-    However, here we assume the matrix is hermitian.
-
-    We now give the algorithm for eigenvalue determination of
-    :math:`3\times 3` matrices.
+    We now give the algorithm for eigenvalue determination of 3x3 Hermitian
+    matrices.
 
     Without loss of generality we write matrix :math:`A` as
 
@@ -45,17 +35,16 @@ def eigvalsh3(matrix, return_invariants=False):
 
         A = \mu I + \theta M
 
-    where :math:`\text{Tr}\, M = 0` and :math:`\text{Tr}\,M^2 = 2`,
-    indicating
-    :math:`\theta^2 = \frac{1}{2}\text{Tr}\,\left(A - \mu I\right)^2`.
-    Exploiting Cayley-Hamilton theorem for :math:`3\times 3` matrices,
-    matrix :math:`M` satisfies
+    where :math:`\text{Tr} M = 0` and :math:`\text{Tr} M^2 = 2`,
+    indicating :math:`\theta^2 = \frac{1}{2} \text{Tr} (A - \mu I)^2`.
+    Exploiting Cayley-Hamilton theorem for 3x3 matrices, matrix :math:`M`
+    satisfies
 
     .. math::
 
         M^3 = M + \text{det}(M) I
 
-    and therefore :math:`\frac{1}{3}\text{Tr}\, M^3 = \text{det} M`.
+    and therefore :math:`\frac{1}{3} \text{Tr} M^3 = \text{det} M`.
     Likewise, the eigenvalues of :math:`M` satisfy:
 
     .. math::
@@ -63,11 +52,20 @@ def eigvalsh3(matrix, return_invariants=False):
         \lambda^3 = \lambda + \text{det}(M).
 
     The three solutions to this equation can be expressed in terms of
-    trigonometric functions. To this end we first perform a change of
-    variable as :math:`\text{det}(M) = -\frac{2}{\sqrt{27}} \sin 3 \phi`.
-    Then, Exploiting the triple-angle trigonometric identity
-    :math:`\sin 3\phi = 3\sin \phi - 4 \sin^3\phi`, the three eigenvalues of
-    matrix :math:`M` read
+    trigonometric functions with real arguments for Hermitian matrices.
+    To this end we first perform a change of variable as
+
+    .. math::
+
+         \text{det}(M) = -\frac{2}{\sqrt{27}} \sin 3 \phi
+
+    Then, exploiting the triple-angle trigonometric identity
+
+    .. math::
+
+         \sin 3\phi = 3\sin \phi - 4 \sin^3\phi
+
+    the three eigenvalues of matrix :math:`M` read
 
     .. math::
 
@@ -120,11 +118,11 @@ def eigvalsh3(matrix, return_invariants=False):
     phi[argument < -1] = -np.pi/6
 
     eigvals = mu.unsqueeze(-1) \
-              + (2/3**0.5) * theta.unsqueeze(-1) \
+            + (2/3**0.5) * theta.unsqueeze(-1) \
               * torch.sin(
                    torch.stack([phi - 2*np.pi/3, phi, phi + 2*np.pi/3], dim=-1)
-                )
-    
+                )  # does not have contribution from mu
+
     if return_invariants:
         return eigvals, (mu, theta, phi)
     else:
@@ -132,6 +130,15 @@ def eigvalsh3(matrix, return_invariants=False):
 
 
 # =============================================================================
+def eigh3x3(matrix, **kwargs):
+    u, v = eign3x3(matrix, func_4_eigvals = eigvalsh3x3, **kwargs)
+    return u.real, v
+
+
+# =============================================================================
+eigvalsh3 = eigvalsh3x3
+
+
 def eigh3(matrix, method='parallelization', eps_theta=1e-6, tol=None):
     """
     Return eigenvalues and eigenvectors of 3x3 hermitian matrices.
