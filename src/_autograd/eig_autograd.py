@@ -12,11 +12,9 @@ for forward and reverse mode algorithmic differentiation."
 import torch
 import warnings
 
-from .eig_2x2 import eigh2, eigsu2
-from .eigh_3x3 import eigvalsh3, eigh3
-from .eigsu_3x3 import eigvalssu3, eigsu3
-
-from .eigsu_3x3 import eigu3_from_h as eigsu3
+from ._eig.eig_2x2 import eigh2x2, eigu2x2
+from ._eig.eig_3x3 import eign3x3
+from ._eig.eigh_3x3 import eigh3x3
 
 TOL = 1e-12
 
@@ -47,16 +45,11 @@ class Eig(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_u, grad_v):
-        # grad_{u & v} denotes derivatives of a scalar output w.r.t. each
-        # element of {u & v}
+        # grad_{u & v} are $\bar u$ and $\bar v$ in the terminology of AD
         u, v = ctx.saved_tensors
-        nabla = calc_nabla(u)
-        vh_grad_v = v.adjoint() @ grad_v
 
-        # check if the imaginary part of diagonal elements of vh_grad_v is 0
-        cond = torch.diagonal(vh_grad_v.imag, dim1=-2, dim2=-1).abs() > TOL
-        if torch.sum(cond):
-            warnings.warn("EIG: Derivative wrt the arbitrary phase isn't zero")
+        nabla = calc_nabla(u)
+        vh_grad_v = calc_vh_grad_v(v, grad_v)
 
         grad_u = torch.diag_embed(grad_u)  # for matrix operations
         grad_matrix = v @ (grad_u + nabla.conj() * vh_grad_v) @ v.adjoint()
@@ -65,7 +58,8 @@ class Eig(torch.autograd.Function):
 
 
 # =============================================================================
-class Eigh(Eig):
+class Eigh(torch.autograd.Function):
+    """Similar to Eig, but specialized for Hermitian matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
@@ -75,73 +69,83 @@ class Eigh(Eig):
 
     @staticmethod
     def backward(ctx, grad_u, grad_v):
-        grad_matrix = Eig.backward(ctx, grad_u, grad_v)
-        return (grad_matrix + grad_matrix.adjoint()) / 2
+        # grad_{u & v} are $\bar u$ and $\bar v$ in the terminology of AD
+        u, v = ctx.saved_tensors
+
+        nabla = calc_nabla(u)  # u and nabla are real
+        vh_grad_v = calc_vh_grad_v(v, grad_v)
+        vh_grad_v = (vh_grad_v.adjoint() - vh_grad_v) / 2
+
+        grad_u = torch.diag_embed(grad_u)  # for matrix operations
+        grad_matrix = v @ (grad_u + nabla * vh_grad_v) @ v.adjoint()
+
+        return grad_matrix
 
 
-class Eigh2(Eigh):
+class Eigh2x2(Eigh):
+    """Similar to Eigh, but specialized for 2x2 Hermitian matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
-        u, v = eigh2(matrix)
+        u, v = eigh2x2(matrix)
         ctx.save_for_backward(u, v)
         return u, v
 
 
-class Eigh3(Eigh):
+class Eigh3x3(Eigh):
+    """Similar to Eigh, but specialized for 3x3 Hermitian matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
-        u, v = eigh3(matrix)
+        u, v = eigh3x3(matrix)
         ctx.save_for_backward(u, v)
         return u, v
 
 
 # =============================================================================
 class Eigu(Eig):
+    """Similar to Eig, but specialized for unitary matrices."""
 
     @staticmethod
     def backward(ctx, grad_u, grad_v):
-        # grad_{u & v} denotes derivatives of a scalar output w.r.t. each
-        # element of {u & v}
+        # grad_{u & v} are $\bar u$ and $\bar v$ in the terminology of AD
         u, v = ctx.saved_tensors
-        nabla = calc_nabla(u)
-        vh_grad_v = v.adjoint() @ grad_v
 
-        # check if the imaginary part of diagonal elements of vh_grad_v is 0
-        cond = torch.diagonal(vh_grad_v.imag, dim1=-2, dim2=-1).abs() > TOL
-        if torch.sum(cond):
-            warnings.warn("EIG: Derivative wrt the arbitrary phase isn't zero")
+        nabla = calc_nabla(u)  # u and nabla are complex
+        vh_grad_v = calc_vh_grad_v(v, grad_v)
+        vh_grad_v = (vh_grad_v.adjoint() - vh_grad_v) / 2
 
-        vh_grad_v = (vh_grad_v - vh_grad_v.adjoint()) / 2
-        grad_u = (grad_u - u * grad_u.conj() * u) / 2
-
+        grad_u = (grad_u - u * u * grad_u.conj()) / 2
         grad_u = torch.diag_embed(grad_u)  # for matrix operations
+
         grad_matrix = v @ (grad_u + nabla.conj() * vh_grad_v) @ v.adjoint()
 
         return grad_matrix
 
 
-class Eigsu2(Eigu):
+class Eigu2x2(Eigu):
+    """Similar to Eigu, but specialized for 2x2 unitary matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
-        u, v = eigsu2(matrix)
+        u, v = eigu2x2(matrix)
         ctx.save_for_backward(u, v)
         return u, v
 
 
-class Eigsu3(Eigu):
+class Eigu3x3(Eigu):
+    """Similar to Eigu, but specialized for 3x3 unitary matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
-        u, v = eigsu3(matrix)
+        u, v = eign3x3(matrix)  # use eign
         ctx.save_for_backward(u, v)
         return u, v
 
 
 # =============================================================================
-class _Eigh3_on_Eig(Eig):  # just for test
+class NaiveEigh3x3(Eig):  # just for test
+    """Similar to Eigh3x3, but AD is not specialized for Hermitian matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
@@ -150,73 +154,30 @@ class _Eigh3_on_Eig(Eig):  # just for test
         return u, v
 
 
-class _Eigsu3_on_Eig(Eig):  # just for test
+class NaiveEigu3x3(Eig):  # just for test
+    """Similar to Eigu3x3, but AD is not specialized for unitary matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
-        u, v = eigsu3(matrix)
+        u, v = eign3x3(matrix)
         ctx.save_for_backward(u, v)
         return u, v
 
 
 # =============================================================================
-class Eigvals(torch.autograd.Function):
-    """A thinner version of Eig."""
+def calc_vh_grad_v(v, grad_v):
+    r"""Return :math:`v^\dagger \bar v` for AD; & check the diagonal terms."""
 
-    @staticmethod
-    def forward(ctx, matrix):
-        u, v = torch.lianlg.eig(matrix)
-        ctx.save_for_backward(u, v)
-        return u
+    vh_grad_v = v.adjoint() @ grad_v
 
-    @staticmethod
-    def backward(ctx, grad_u):
-        u, v = ctx.saved_tensors
-        grad_matrix = v @ (grad_u.unsqueeze(-1) * v.adjoint())
-        return grad_matrix
+    # check if the imaginary part of diagonal elements of vh_grad_v is 0
+    cond = torch.diagonal(vh_grad_v.imag, dim1=-2, dim2=-1).abs() > TOL
+    if torch.sum(cond):
+        warnings.warn("AD for eig: nonzero derivative for the arbitrary phase")
+
+    return vh_grad_v
 
 
-class Eigvalsh3(Eigvals):
-
-    @staticmethod
-    def forward(ctx, matrix):
-        u, v = eigh3(matrix)
-        ctx.save_for_backward(u, v)
-        return u
-
-
-class Eigvalssu3(Eigvals):
-
-    @staticmethod
-    def forward(ctx, matrix):
-        u, v = eigsu3(matrix)
-        ctx.save_for_backward(u, v)
-        return u
-
-
-# =============================================================================
-class ReverseEig(torch.autograd.Function):
-    # Need to be checked if it is correct
-    """Reverse of eigenvalue decomposition."""
-
-    @staticmethod
-    def forward(ctx, u, v):
-        matrix = v @ (u.unsqueeze(-1) * v.adjoint())
-        ctx.save_for_backward(u, v)  # no need to save matrix
-        return matrix
-
-    @staticmethod
-    def backward(ctx, grad_matrix):
-        # grad_? denotes derivative of a scalar output wrt each element of '?'
-        u, v = ctx.saved_tensors
-        grad_matrix = v.adjoint() @ grad_matrix @ v  # new definiton
-        grad_u = torch.diagonal(grad_matrix, dim1=-1, dim2=-2)
-        delta = calc_eig_delta(u)
-        grad_v = v @ (delta * grad_matrix)
-        return grad_u, grad_v
-
-
-# =============================================================================
 def calc_eig_delta(u):
     """u is the list of eigenvalues"""
     n = u.shape[-1]
