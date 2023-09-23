@@ -12,9 +12,7 @@ for forward and reverse mode algorithmic differentiation."
 import torch
 import warnings
 
-from ._eig.eig_2x2 import eigh2x2, eigu2x2
-from ._eig.eig_3x3 import eign3x3
-from ._eig.eigh_3x3 import eigh3x3
+from .._eig import eigh, eigu
 
 TOL = 1e-12
 
@@ -63,7 +61,7 @@ class Eigh(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, matrix):
-        u, v = torch.linalg.eigh(matrix)
+        u, v = eigh(matrix)
         ctx.save_for_backward(u, v)
         return u, v
 
@@ -82,29 +80,15 @@ class Eigh(torch.autograd.Function):
         return grad_matrix
 
 
-class Eigh2x2(Eigh):
-    """Similar to Eigh, but specialized for 2x2 Hermitian matrices."""
-
-    @staticmethod
-    def forward(ctx, matrix):
-        u, v = eigh2x2(matrix)
-        ctx.save_for_backward(u, v)
-        return u, v
-
-
-class Eigh3x3(Eigh):
-    """Similar to Eigh, but specialized for 3x3 Hermitian matrices."""
-
-    @staticmethod
-    def forward(ctx, matrix):
-        u, v = eigh3x3(matrix)
-        ctx.save_for_backward(u, v)
-        return u, v
-
-
 # =============================================================================
-class Eigu(Eig):
+class Eigu(torch.autograd.Function):
     """Similar to Eig, but specialized for unitary matrices."""
+
+    @staticmethod
+    def forward(ctx, matrix):
+        u, v = eigu(matrix)
+        ctx.save_for_backward(u, v)
+        return u, v
 
     @staticmethod
     def backward(ctx, grad_u, grad_v):
@@ -123,43 +107,23 @@ class Eigu(Eig):
         return grad_matrix
 
 
-class Eigu2x2(Eigu):
-    """Similar to Eigu, but specialized for 2x2 unitary matrices."""
-
-    @staticmethod
-    def forward(ctx, matrix):
-        u, v = eigu2x2(matrix)
-        ctx.save_for_backward(u, v)
-        return u, v
-
-
-class Eigu3x3(Eigu):
-    """Similar to Eigu, but specialized for 3x3 unitary matrices."""
-
-    @staticmethod
-    def forward(ctx, matrix):
-        u, v = eign3x3(matrix)  # use eign
-        ctx.save_for_backward(u, v)
-        return u, v
-
-
 # =============================================================================
-class NaiveEigh3x3(Eig):  # just for test
-    """Similar to Eigh3x3, but AD is not specialized for Hermitian matrices."""
+class NaiveEigh(Eig):  # just for test
+    """Similar to Eigh, but AD is not specialized for Hermitian matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
-        u, v = eigh3(matrix)
+        u, v = eigh(matrix)
         ctx.save_for_backward(u, v)
         return u, v
 
 
-class NaiveEigu3x3(Eig):  # just for test
-    """Similar to Eigu3x3, but AD is not specialized for unitary matrices."""
+class NaiveEigu(Eig):  # just for test
+    """Similar to Eigu, but AD is not specialized for unitary matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
-        u, v = eign3x3(matrix)
+        u, v = eigu(matrix)
         ctx.save_for_backward(u, v)
         return u, v
 
