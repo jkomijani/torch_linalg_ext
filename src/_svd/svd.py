@@ -2,7 +2,8 @@
 
 import torch
 
-from .._eig import eigh
+# from .._eig import eigh
+from .._autograd import eigh
 
 
 class AttributeDict:
@@ -12,7 +13,10 @@ class AttributeDict:
         self.__dict__.update(**dict_)
 
     def __repr__(self):
-        return str(self.__dict__)
+        str_ = "svd:\n"
+        for key, value in self.__dict__.items():
+            str_ += f"{key}={value}\n"
+        return str_
 
 
 def svd(matrix, include_suvd=False):
@@ -48,12 +52,12 @@ def svd(matrix, include_suvd=False):
     vh = ((1 / s).unsqueeze(-1) * u.adjoint()) @ matrix
 
     # The method fails if S^{-1} diverges, which will be taken care separately.
-    cond = torch.sum(s == 0, dim=-1).ravel()
+    cond = (torch.sum(s == 0, dim=-1) > 0).ravel()
     if torch.sum(cond) > 0:
         n = matrix.shape[-1]
-        vh.view(-1, n, n)[cond] = slow_svd(matrix.view(-1, n, n)[cond])
+        vh.view(-1, n, n)[cond] = slow_svd(matrix.view(-1, n, n)[cond]).Vh
 
-    if calc_suvd:
+    if include_suvd:
         return append_suvd(AttributeDict(U=u, S=s, Vh=vh))
     else:
         return AttributeDict(U=u, S=s, Vh=vh)
@@ -113,19 +117,19 @@ def slow_svd(matrix, include_suvd=False):
 
     vh = d @ v.adjoint()
 
-    if calc_suvd:
+    if include_suvd:
         return append_suvd(AttributeDict(U=u, S=s, Vh=vh))
     else:
         return AttributeDict(U=u, S=s, Vh=vh)
 
 
-def append_suvh(svd):
+def append_suvd(svd):
     """Return a new svd object that includes U V^\dagger"""
     uvh = svd.U @ svd.Vh
-    det = torch.det(uvh)
+    rdet = torch.det(uvh)**(1 / uvh.shape[-1])  # root of determinant
     # we now make determinant of uvh unity:
-    uvh = uvh / det.reshape(*det.shape, 1, 1)**(1 / uvh.shape[-1])
-    return AttributeDict(U=svd.U, S=svd.S, Vh=SVD.vh, det_uvh=det, sUVh=uvh)
+    uvh = uvh / rdet.reshape(*rdet.shape, 1, 1)
+    return AttributeDict(U=svd.U, S=svd.S, Vh=svd.Vh, rdet_uvh=rdet, sUVh=uvh)
 
 
 def svd_for_su2sums(matrix):
