@@ -113,7 +113,7 @@ def eigvalssu3x3(matrix, return_invariants=False):
                dim=-1
                )
 
-    _, sorted_ind = torch.sort(eigvals.imag, dim=-1)
+    _, sorted_ind = torch.sort(eigvals.real, dim=-1)
     eigvals = eigvals.gather(-1, sorted_ind)
 
     if return_invariants:
