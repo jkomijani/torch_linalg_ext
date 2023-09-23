@@ -1,9 +1,7 @@
 
-from ._eig import eigvalsh3, eigvalssu3
-from ._eig import eigh2, eigsu2
-from ._eig import eigh3, eigsu3
-from ._eig import eigh, eigsu
-from ._eig import reverse_eig
-from ._eig.generic import eyes_like
+# functions from _autograd support algorithmic differentiation
+from ._autograd import eigh2x2, eigu2x2
+from ._autograd import eigh3x3, eigu3x3
+from ._autograd import eigh, eigu
 
 from ._svd.svd import svd
