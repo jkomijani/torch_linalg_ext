@@ -5,7 +5,7 @@ import numpy as np
 
 
 # =============================================================================
-def eigh2(matrix):
+def eigh2x2(matrix):
     """
     Return eigenvalues and eigenvectors of 2x2 hermitian matrices using closed
     form expressions.
@@ -54,7 +54,7 @@ def eigh2(matrix):
 
 
 # =============================================================================
-def eigsu2(matrix):
+def eigsu2x2(matrix):
     """
     Return eigenvalues and eigenvectors of 2x2 special unitary matrices using
     closed form expressions.
@@ -103,7 +103,7 @@ def eigsu2(matrix):
 
 
 # =============================================================================
-def eigu2(matrix):
+def eigu2x2(matrix):
     root_det = torch.det(matrix).reshape(*matrix.shape, 1, 1)**0.5
-    u, v = eigsu2(matrix / root_det)
+    u, v = eigsu2x2(matrix / root_det)
     return root_det * u, v
