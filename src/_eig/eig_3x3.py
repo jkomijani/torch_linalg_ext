@@ -203,7 +203,7 @@ def eign3x3(matrix,
 
 
 # =============================================================================
-def nullspace3x3(matrix, indices=[0, 1, 2], tol=0):
+def nullspace3x3(matrix, indices=[0, 1, 2], tol=1e-15):
     """Return the (right) null space for 3x3 matrices with a zero eigenvalue:
 
     .. math::
@@ -211,7 +211,7 @@ def nullspace3x3(matrix, indices=[0, 1, 2], tol=0):
          M X = 0
 
     This function returns only one vector of the null space even if there are
-    more one vanishing eigenvalues.
+    more than one vanishing eigenvalues.
 
     Assuming the input matrix has a null space, we calculate it in two steps:
 
@@ -225,8 +225,9 @@ def nullspace3x3(matrix, indices=[0, 1, 2], tol=0):
 
     A remark on precision: if the third column is not identically zero, but
     very small, the above method may fail from round-off errors. To avoid the
-    problem, we switch to another method that uses cross-product of the first
-    and second rows (yes, rows and not columns).
+    problem, we can switch to another method that uses cross-product of the
+    first and second rows (yes, rows and not columns). But, we do not do it
+    here because that method can fail too.
     """
 
     indices_flag = (0 in indices) and (1 in indices) and (2 in indices)
@@ -254,7 +255,7 @@ def nullspace3x3(matrix, indices=[0, 1, 2], tol=0):
     nullnorm = torch.linalg.vector_norm(nullspace, dim=-1, keepdim=True)
     nullspace = nullspace / nullnorm
 
-    cond = (c_sq.ravel() <= tol)  # c_sq = |c.c|
+    cond = (c_sq.ravel() <= tol**2)  # c_sq = |c.c|
     if torch.sum(cond) > 0:
         nullspace[:, indices[0]][cond] = 0 
         nullspace[:, indices[1]][cond] = 0
@@ -264,7 +265,7 @@ def nullspace3x3(matrix, indices=[0, 1, 2], tol=0):
 
 
 # =============================================================================
-def nullspace3x3_from_cross_product(matrix, indices=[0, 1, 2], tol=0):
+def nullspace3x3_from_cross_product(matrix, indices=[0, 1, 2], tol=1e-8):
     """Return the (right) null space for 3x3 matrices with a zero eigenvalue:
 
     .. math::
@@ -272,7 +273,7 @@ def nullspace3x3_from_cross_product(matrix, indices=[0, 1, 2], tol=0):
          M X = 0
 
     This function returns only one vector of the null space even if there are
-    more one vanishing eigenvalues.
+    more than one vanishing eigenvalues.
 
     For determination of the nullspace of a 3x3 matrix, we follow
     "Efficient numerical diagonalization of hermitian 3x3 matrices"
@@ -294,14 +295,16 @@ def nullspace3x3_from_cross_product(matrix, indices=[0, 1, 2], tol=0):
     nullnorm = torch.linalg.vector_norm(nullspace, dim=-1, keepdim=True)
     nullspace = nullspace / nullnorm
 
-    cond = (nullnorm.ravel() <= tol)  # nullnorm = |a x b|
+    cond = (nullnorm.ravel() <= tol**2)  # nullnorm = |a x b|
     if torch.sum(cond) > 0:  # if nullnorm is zero at least for one case
+        # The following three command lines assume the matrix is normal
         a = matrix[..., indices[0]].view(-1, 3)  # 1st picked column (not row)
         b = matrix[..., indices[1]].view(-1, 3)  # 2nd picked column
         nullspace[cond] = \
             orthonormal_to_parallel_vectors(a[cond], b[cond], indices=indices)
 
-        #nullspace[cond] = nullspace3x3(
+        # We could also switch to the direct method
+        # nullspace[cond] = nullspace3x3(
         #       matrix.reshape(-1, 3, 3)[cond],
         #       indices=indices
         #       )
