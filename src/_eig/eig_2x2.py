@@ -47,8 +47,13 @@ def eigh2x2(matrix):
 
     # if vec_norm == 0, then eigvecs = eye(2)
     cond = vec_norm.ravel() == 0
+    cond0 = cond & (z <= 0).ravel()
+    cond1 = cond & (z > 0).ravel()
+    mat0 = torch.tensor([[[1, 0], [0, 1]]]) + 0j
+    mat1 = torch.tensor([[[0, 1], [1, 0]]]) + 0j
     eigvecs_ = eigvecs.reshape(-1, 2, 2)
-    eigvecs_[cond] = torch.eye(2).reshape(-1, 2, 2).repeat(sum(cond), 1, 1) +0j
+    eigvecs_[cond0] = mat0.repeat(sum(cond0), 1, 1)
+    eigvecs_[cond1] = mat1.repeat(sum(cond1), 1, 1)
 
     return eigvals, eigvecs
 
@@ -96,8 +101,13 @@ def eigsu2x2(matrix):
 
     # if vec_norm == 0, then eigvecs = eye(2)
     cond = vec_norm.ravel() == 0
+    cond0 = cond and (z <= 0).ravel()
+    cond1 = cond and (z > 0).ravel()
+    mat0 = torch.tensor([[[1, 0], [0, 1]]]) + 0j
+    mat1 = torch.tensor([[[0, 1], [1, 0]]]) + 0j
     eigvecs_ = eigvecs.reshape(-1, 2, 2)
-    eigvecs_[cond] = torch.eye(2).reshape(-1, 2, 2).repeat(sum(cond), 1, 1) +0j
+    eigvecs_[cond0] = mat0.repeat(sum(cond0), 1, 1)
+    eigvecs_[cond1] = mat1.repeat(sum(cond1), 1, 1)
 
     return eigvals, eigvecs
 
