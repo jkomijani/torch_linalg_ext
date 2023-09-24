@@ -171,8 +171,10 @@ def eign3x3(matrix,
     match method_4_nullspace:
         case 'direct':
             func_4_nullspace = nullspace3x3
+            func_4_ind = lambda k: [(k + 1) % 3, (k + 2) % 3, k % 3]
         case 'cross-product':
             func_4_nullspace = nullspace3x3_from_cross_product
+            func_4_ind = lambda k: [k % 3, (k + 1) % 3, (k + 2) % 3]
 
     eigvecs = torch.zeros_like(matrix)
     eye = eyes_like(matrix)
@@ -184,8 +186,7 @@ def eign3x3(matrix,
     eigvals = func_4_eigvals(matrix)
 
     for k in [0, 2]:
-        # indices = [k % 3, (k + 1) % 3, (k + 2) % 3]  # good for cross-product
-        indices = [(k + 1) % 3, (k + 2) % 3, k % 3]
+        indices = func_4_ind(k)
         eigval = eigvals[..., k:k+1].unsqueeze(-1)
         eigvecs[..., k] = func_4_nullspace(
                 matrix - eigval * eye,
@@ -203,7 +204,7 @@ def eign3x3(matrix,
 
 
 # =============================================================================
-def nullspace3x3(matrix, indices=[0, 1, 2], tol=1e-15):
+def nullspace3x3(matrix, indices=[0, 1, 2], tol=1e-14):
     """Return the (right) null space for 3x3 matrices with a zero eigenvalue:
 
     .. math::
@@ -248,14 +249,16 @@ def nullspace3x3(matrix, indices=[0, 1, 2], tol=1e-15):
     col_b = col_b - coef_b.unsqueeze(-1) * col_c
     
     # col_a and col_b are parallel since the matrix has a null space
-    nullspace = orthonormal_to_parallel_vectors(col_a, col_b, indices=indices)
+    nullspace = orthonormal_to_parallel_vectors(
+            col_a, col_b, indices=indices, tol=tol
+            )
     nullspace[:, indices[2]] = -coef_a * nullspace[:, indices[0]] \
                                -coef_b * nullspace[:, indices[1]]
 
     nullnorm = torch.linalg.vector_norm(nullspace, dim=-1, keepdim=True)
     nullspace = nullspace / nullnorm
 
-    cond = (c_sq.ravel() <= tol**2)  # c_sq = |c.c|
+    cond = (c_sq.ravel() <= tol)  # c_sq = |c.c|
     if torch.sum(cond) > 0:
         nullspace[:, indices[0]][cond] = 0 
         nullspace[:, indices[1]][cond] = 0
@@ -265,7 +268,7 @@ def nullspace3x3(matrix, indices=[0, 1, 2], tol=1e-15):
 
 
 # =============================================================================
-def nullspace3x3_from_cross_product(matrix, indices=[0, 1, 2], tol=1e-8):
+def nullspace3x3_from_cross_product(matrix, indices=[0, 1, 2], tol=1e-14):
     """Return the (right) null space for 3x3 matrices with a zero eigenvalue:
 
     .. math::
@@ -295,13 +298,14 @@ def nullspace3x3_from_cross_product(matrix, indices=[0, 1, 2], tol=1e-8):
     nullnorm = torch.linalg.vector_norm(nullspace, dim=-1, keepdim=True)
     nullspace = nullspace / nullnorm
 
-    cond = (nullnorm.ravel() <= tol**2)  # nullnorm = |a x b|
+    cond = (nullnorm.ravel() <= tol)  # nullnorm = |a x b|
     if torch.sum(cond) > 0:  # if nullnorm is zero at least for one case
         # The following three command lines assume the matrix is normal
         a = matrix[..., indices[0]].view(-1, 3)  # 1st picked column (not row)
         b = matrix[..., indices[1]].view(-1, 3)  # 2nd picked column
-        nullspace[cond] = \
-            orthonormal_to_parallel_vectors(a[cond], b[cond], indices=indices)
+        nullspace[cond] = orthonormal_to_parallel_vectors(
+                a[cond], b[cond], indices=indices, tol=tol
+                )
 
         # We could also switch to the direct method
         # nullspace[cond] = nullspace3x3(
@@ -325,19 +329,19 @@ def cross_product(vec1, vec2):
 
 
 # =============================================================================
-def orthonormal_to_parallel_vectors(vec1, vec2, indices=[0, 1, 2]):
+def orthonormal_to_parallel_vectors(vec1, vec2, indices=[0, 1, 2], tol=1e-14):
     """Return an orthornormal vector to three dimensional vectors vec1 & vec2
     that are assumed to be parallel.
     """
     x = torch.sum(vec1.conj() * vec2, dim=-1)
     y = torch.sum(vec1.conj() * vec1, dim=-1)
-    z = torch.sqrt(x * x + y * y)  # if z = 0, then x = y = 0, then vec1 = 0
+    z = torch.sqrt(x.conj() * x + y * y).real  # z = 0 -> x = y = 0 & vec1 = 0
 
     vec3 = torch.zeros_like(vec1)
     vec3[..., indices[0]] = -x / z
     vec3[..., indices[1]] = y / z
 
-    cond = (z == 0).ravel()
+    cond = (z.real <= tol).ravel()
     if torch.sum(cond) > 0:
         vec3[..., indices[0]].view(-1)[cond] = 1
         vec3[..., indices[1]].view(-1)[cond] = 0
