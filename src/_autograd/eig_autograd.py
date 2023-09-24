@@ -72,7 +72,7 @@ class Eigh(torch.autograd.Function):
 
         nabla = calc_nabla(u)  # u and nabla are real
         vh_grad_v = calc_vh_grad_v(v, grad_v)
-        vh_grad_v = (vh_grad_v.adjoint() - vh_grad_v) / 2
+        vh_grad_v = (vh_grad_v - vh_grad_v.adjoint()) / 2
 
         grad_u = torch.diag_embed(grad_u)  # for matrix operations
         grad_matrix = v @ (grad_u + nabla * vh_grad_v) @ v.adjoint()
@@ -97,7 +97,7 @@ class Eigu(torch.autograd.Function):
 
         nabla = calc_nabla(u)  # u and nabla are complex
         vh_grad_v = calc_vh_grad_v(v, grad_v)
-        vh_grad_v = (vh_grad_v.adjoint() - vh_grad_v) / 2
+        vh_grad_v = (vh_grad_v - vh_grad_v.adjoint()) / 2
 
         grad_u = (grad_u - u * u * grad_u.conj()) / 2
         grad_u = torch.diag_embed(grad_u)  # for matrix operations
