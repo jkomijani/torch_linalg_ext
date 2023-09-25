@@ -1,5 +1,3 @@
 
-# functions from _autograd support algorithmic differentiation
-from ._autograd import eigh, eigu
-
-from ._svd import svd
+# functions from _autograd **reliably** support algorithmic differentiation
+from ._autograd import eigh, eigu, svd

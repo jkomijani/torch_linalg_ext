@@ -1,0 +1,117 @@
+# Copyright (c) 2023 Javad Komijani
+
+r"""
+In this module we implement our own custom autograd Functions by subclassing
+torch.autograd.Function and implementing the forward and backward passes
+which operate on Tensors.
+
+For example, one can see "An extended collection of matrix derivative results
+for forward and reverse mode algorithmic differentiation."
+"""
+
+import torch
+import warnings
+
+from .._svd import svd, AttributeDict4SVD
+
+TOL = 1e-12
+
+
+# =============================================================================
+class SVD(torch.autograd.Function):
+    r"""
+    For more details see
+    "An extended collection of matrix derivative results for forward and
+    reverse mode algorithmic differentiation."
+    We follow the notation introduced in the above reference as
+    "We consider a computation which begins with a single scalar input variable
+    :math:`s_i` and eventually, through a sequence of calculations, computes a
+    single scalar output :math:`s_o` . Using standard automatic differentiation
+    (AD) terminology, if :math:`A` is a matrix which is an intermediate
+    variable within the computation, then
+    1. :math:`\dot A` denotes the derivative of A with respect to s_i
+    2. :math:`\bar A` denotes the derivative of s_o w.r.t each element of A.
+
+    https://pytorch.org/docs/stable/autograd.html#torch.autograd.Function
+    """
+
+    @classmethod
+    def apply_wrapper(clc, matrix):
+        u, s, vh = clc.apply(matrix)
+        return AttributeDict4SVD(U=u, S=s, Vh=vh)
+
+    @staticmethod
+    def forward(ctx, matrix):
+        svd_ = svd(matrix)
+        ctx.save_for_backward(svd_.U, svd_.S, svd_.Vh)
+        return svd_.U, svd_.S, svd_.Vh
+
+    @staticmethod
+    def backward(ctx, grad_u, grad_s, grad_vh):
+        u, s, vh = ctx.saved_tensors
+
+        nabla_s = calc_nabla(s)
+        nabla_plus = calc_nabla_plus(s)
+
+        uh_grad_u = calc_vh_grad_v(u, grad_u)
+        vh_grad_v = calc_vh_grad_v_version_h(vh, grad_vh)
+
+        uh_grad_u = (uh_grad_u - uh_grad_u.adjoint()) / 2
+        vh_grad_v = (vh_grad_v - vh_grad_v.adjoint()) / 2
+
+        grad_s = torch.diag_embed(grad_s)  # for matrix operations
+        grad_matrix = u @ (
+                grad_s
+                + nabla_s * (uh_grad_u + vh_grad_v)
+                + nabla_plus * (uh_grad_u - vh_grad_v)
+                ) @ vh
+
+        return grad_matrix
+
+
+# =============================================================================
+def calc_vh_grad_v(v, grad_v):
+    r"""Return :math:`v^\dagger \bar v` for AD; & check the diagonal terms."""
+
+    vh_grad_v = v.adjoint() @ grad_v
+
+    # check if the imaginary part of diagonal elements of vh_grad_v is 0
+    cond = torch.diagonal(vh_grad_v.imag, dim1=-2, dim2=-1).abs() > TOL
+    if torch.sum(cond):
+        warnings.warn("AD for svd: nonzero derivative for the arbitrary phase")
+
+    return vh_grad_v
+
+
+def calc_vh_grad_v_version_h(vh, grad_vh):
+    r"""Return :math:`v^\dagger \bar v` for AD; & check the diagonal terms."""
+
+    vh_grad_v = vh @ grad_vh.adjoint()
+
+    # check if the imaginary part of diagonal elements of vh_grad_v is 0
+    cond = torch.diagonal(vh_grad_v.imag, dim1=-2, dim2=-1).abs() > TOL
+    if torch.sum(cond):
+        warnings.warn("AD for svd: nonzero derivative for the arbitrary phase")
+
+    return vh_grad_v
+
+
+# =============================================================================
+def calc_nabla(s):
+    """s is the list of singular values"""
+    n = s.shape[-1]
+    delta = s.view(-1, 1, n).repeat(1, n, 1) - s.view(-1, n, 1).repeat(1, 1, n)
+    delta = delta.view(*s.shape[:-1], n, n)
+    nabla = 1 / delta
+    nabla[ delta == 0 ] = 0
+    return nabla
+
+
+def calc_nabla_plus(s):
+    """s is the list of singular values"""
+    n = s.shape[-1]
+    zeta = s.view(-1, 1, n).repeat(1, n, 1) + s.view(-1, n, 1).repeat(1, 1, n)
+    zeta = zeta.view(*s.shape[:-1], n, n)
+    nabla_plus = 1 / zeta
+    nabla_plus[ zeta == 0 ] = 0
+    return nabla_plus
