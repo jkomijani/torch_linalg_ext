@@ -18,7 +18,7 @@ class AttributeDict4SVD:
         return str_
 
 
-def svd(matrix, include_suvd=False):
+def svd(matrix):
     """Return singular value decomposition of the input complex, square matrix.
 
     The singular value decomposition of matrix :math:`M` is
@@ -29,17 +29,6 @@ def svd(matrix, include_suvd=False):
 
     If :math:`S^{-1}` exists, then :math:`U V^\dagger` is unique, otherwise
     it is not.
-
-    As torch.linalg.svd, we can only return (u, s, vh), but there is an option
-    to return more quantities.
-    To this end, set `include_suvd=True` to also have we also return
-
-    .. math::
-
-         (U @ V^\dagger) * phase_factor
-
-    where the phase factor is constructed such that the matrix turns to SU(n).
-    We call this matrix `sUVh`. We also return determinant of `(U @ V^\dagger)`.
     """
     # First obtain S^2 and U
     s_sq, u = eigh(matrix @ matrix.adjoint())
@@ -59,13 +48,10 @@ def svd(matrix, include_suvd=False):
         n = matrix.shape[-1]
         vh.view(-1, n, n)[cond] = slow_svd(matrix.view(-1, n, n)[cond]).Vh
 
-    if include_suvd:
-        return append_suvd(AttributeDict4SVD(U=u, S=s, Vh=vh))
-    else:
-        return AttributeDict4SVD(U=u, S=s, Vh=vh)
+    return AttributeDict4SVD(U=u, S=s, Vh=vh)
 
 
-def slow_svd(matrix, include_suvd=False):
+def slow_svd(matrix):
     """Return singular value decomposition of the input complex, square matrix.
 
     The singular value decomposition of matrix :math:`M` is
@@ -85,7 +71,7 @@ def slow_svd(matrix, include_suvd=False):
          M = (U D_u) S (V D_v)^\dagger
 
     is another valid decomposition only if :math:`S D_u D_v^\dagger = S`.
-    When :math:`S` is invertible, the condition inidcates :math:`D_u = D_v`.
+    When :math:`S` is invertible, the condition indicates :math:`D_u = D_v`.
     This then implies that
 
     .. math::
@@ -121,16 +107,35 @@ def slow_svd(matrix, include_suvd=False):
 
     vh = (naive_d + torch.diag_embed(fixer)) @ naive_v.adjoint()
 
-    if include_suvd:
-        return append_suvd(AttributeDict4SVD(U=u, S=s, Vh=vh))
-    else:
-        return AttributeDict4SVD(U=u, S=s, Vh=vh)
+    return AttributeDict4SVD(U=u, S=s, Vh=vh)
 
 
-def append_suvd(svd):
-    """Return a new svd object that includes U V^\dagger"""
-    uvh = svd.U @ svd.Vh
+def append_suvh(svd_):
+    """Return a new svd_ object that also includes the produce of U and Vh
+    projected to special unitary matrices as
+
+    .. math::
+
+         (U @ V^\dagger) * phase_factor
+
+    where the phase factor is constructed such that the matrix turns to SU(n).
+    We call this matrix `sUVh`.
+    It also returns determinant of `(U @ V^\dagger)`.
+    """
+    uvh = svd_.U @ svd_.Vh
     rdet = torch.det(uvh)**(1 / uvh.shape[-1])  # root of determinant
-    # we now make determinant of uvh unity:
+    # We now make determinant of uvh unity:
     uvh = uvh / rdet.reshape(*rdet.shape, 1, 1)
-    return AttributeDict4SVD(U=svd.U, S=svd.S, Vh=svd.Vh, rdet_uvh=rdet, sUVh=uvh)
+    return AttributeDict4SVD(U=svd_.U, S=svd_.S, Vh=svd_.Vh, rdet_uvh=rdet, sUVh=uvh)
+
+
+def append_su(svd_, matrix=None):
+    """Return a new svd_ object, in which U is scaled by a phase, and called sU,
+    such that sU @ Vh is special unitary
+    """
+    det = torch.det(svd_.U @ svd_.Vh if matrix is None else matrix)
+    rdet_angle = torch.angle(det) / svd_.U.shape[-1]  # r: rooted
+    s_u = svd_.U * torch.exp(-1j * rdet_angle.reshape(*rdet_angle.shape, 1, 1))
+    return AttributeDict4SVD(
+        U=svd_.U, S=svd_.S, Vh=svd_.Vh, rdet_angle=rdet_angle, sU=s_u
+        )
