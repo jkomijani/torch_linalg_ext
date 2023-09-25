@@ -48,11 +48,14 @@ def svd(matrix, include_suvd=False):
     # V can be obtained by multiplying S^{-1} U^\dagger and matrix
     s = torch.sqrt(s_sq)
     s[ s_sq < 0 ] = 0  # to remove possible roundoff error
+    inv_s = 1 / s
+    inv_s[ s == 0 ] = 0
 
-    vh = ((1 / s).unsqueeze(-1) * u.adjoint()) @ matrix
+    vh = (inv_s.unsqueeze(-1) * u.adjoint()) @ matrix
 
     # The method fails if S^{-1} diverges, which will be taken care separately.
-    cond = (torch.sum(s == 0, dim=-1) > 0).ravel()
+    # cond = (torch.sum(s == 0, dim=-1) > 0).ravel()  # not precise (roundoff)
+    cond = (torch.linalg.matrix_norm(vh) < 0.99 * vh.shape[-1]**0.5).ravel()
     if torch.sum(cond) > 0:
         n = matrix.shape[-1]
         vh.view(-1, n, n)[cond] = slow_svd(matrix.view(-1, n, n)[cond]).Vh
@@ -96,26 +99,28 @@ def slow_svd(matrix, include_suvd=False):
     situation.
     """
     s_sq, u = eigh(matrix @ matrix.adjoint())
-    _, v = eigh(matrix.adjoint() @ matrix)
-
-    s_times_d = u.adjoint() @ matrix @ v  # S D
-
-    # we shoud find D and then vh = D @ v.adjoint()
-    # not that D is block diagonal, each block corresponds to a unique singular
-    # value and the block is unitary itself.
-    # we replace the block correspoding to vanishing sigular values to I.
+    _, naive_v = eigh(matrix.adjoint() @ matrix)  # v = naive_v @ D.adjoint()
 
     s = torch.sqrt(s_sq)
     s[ s_sq < 0 ] = 0  # to remove possible roundoff error
     inv_s = 1 / s
     inv_s[ s == 0 ] = 0
 
+    # If all singular values are nonzero, the following expression yields `D`
+    # such that `vh = D @ naive_v.adjoint()`.
+    # Note that D is block diagonal, each block corresponds to a unique
+    # singular value and the block is unitary itself.
+    # We replace the block correspoding to vanishing sigular values to I; it is
+    # numerically more precise to look at the vanishing diagonal terms in
+    # s_times_d than s.
+
+    naive_d = inv_s.unsqueeze(-1) * (u.adjoint() @ matrix @ naive_v)
+
     fixer = torch.zeros_like(s)
-    fixer[ s == 0 ] = 1
+    # fixer[ s == 0] = 1  # not precise because of round off errors
+    fixer[ torch.linalg.vector_norm(naive_d, dim=-1) < 0.01 ] = 1
 
-    d = inv_s.unsqueeze(-1) * s_times_d + torch.diag_embed(fixer)
-
-    vh = d @ v.adjoint()
+    vh = (naive_d + torch.diag_embed(fixer)) @ naive_v.adjoint()
 
     if include_suvd:
         return append_suvd(AttributeDict(U=u, S=s, Vh=vh))
