@@ -1,5 +1,6 @@
+# *** Functions imported here do not have reliable autograd. ***
 
-# The following functions do not have reliable autograd.
+import torch
 
 from . import generic
 

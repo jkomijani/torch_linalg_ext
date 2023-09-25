@@ -2,11 +2,10 @@
 
 import torch
 
-# from .._eig import eigh
-from .._autograd import eigh
+from .._eig import eigh
 
 
-class AttributeDict:
+class AttributeDict4SVD:
     """For accessing a dict key like an attribute."""
 
     def __init__(self, **dict_):
@@ -61,9 +60,9 @@ def svd(matrix, include_suvd=False):
         vh.view(-1, n, n)[cond] = slow_svd(matrix.view(-1, n, n)[cond]).Vh
 
     if include_suvd:
-        return append_suvd(AttributeDict(U=u, S=s, Vh=vh))
+        return append_suvd(AttributeDict4SVD(U=u, S=s, Vh=vh))
     else:
-        return AttributeDict(U=u, S=s, Vh=vh)
+        return AttributeDict4SVD(U=u, S=s, Vh=vh)
 
 
 def slow_svd(matrix, include_suvd=False):
@@ -123,9 +122,9 @@ def slow_svd(matrix, include_suvd=False):
     vh = (naive_d + torch.diag_embed(fixer)) @ naive_v.adjoint()
 
     if include_suvd:
-        return append_suvd(AttributeDict(U=u, S=s, Vh=vh))
+        return append_suvd(AttributeDict4SVD(U=u, S=s, Vh=vh))
     else:
-        return AttributeDict(U=u, S=s, Vh=vh)
+        return AttributeDict4SVD(U=u, S=s, Vh=vh)
 
 
 def append_suvd(svd):
@@ -134,4 +133,4 @@ def append_suvd(svd):
     rdet = torch.det(uvh)**(1 / uvh.shape[-1])  # root of determinant
     # we now make determinant of uvh unity:
     uvh = uvh / rdet.reshape(*rdet.shape, 1, 1)
-    return AttributeDict(U=svd.U, S=svd.S, Vh=svd.Vh, rdet_uvh=rdet, sUVh=uvh)
+    return AttributeDict4SVD(U=svd.U, S=svd.S, Vh=svd.Vh, rdet_uvh=rdet, sUVh=uvh)
