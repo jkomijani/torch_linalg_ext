@@ -53,8 +53,10 @@ class SVD(torch.autograd.Function):
         nabla_s = calc_nabla(s)
         nabla_plus = calc_nabla_plus(s)
 
-        uh_grad_u = calc_vh_grad_v(u, grad_u)
-        vh_grad_v = calc_vh_grad_v_version_h(vh, grad_vh)
+        uh_grad_u = u.adjoint() @ grad_u
+        vh_grad_v = vh @ grad_vh.adjoint()
+
+        check_for_arbitrary_phase(uh_grad_u, vh_grad_v)
 
         uh_grad_u = (uh_grad_u - uh_grad_u.adjoint()) / 2
         vh_grad_v = (vh_grad_v - vh_grad_v.adjoint()) / 2
@@ -70,33 +72,16 @@ class SVD(torch.autograd.Function):
 
 
 # =============================================================================
-def calc_vh_grad_v(v, grad_v):
-    r"""Return :math:`v^\dagger \bar v` for AD; & check the diagonal terms."""
-
-    vh_grad_v = v.adjoint() @ grad_v
-
-    # check if the imaginary part of diagonal elements of vh_grad_v is 0
-    cond = torch.diagonal(vh_grad_v.imag, dim1=-2, dim2=-1).abs() > TOL
+def check_for_arbitrary_phase(uh_grad_u, vh_grad_v):
+    """Check if the imaginary part of diagonal elements of the sum of inputs
+    are 0.
+    """
+    x = uh_grad_u.imag + vh_grad_v.imag
+    cond = torch.diagonal(x, dim1=-2, dim2=-1).abs() > TOL
     if torch.sum(cond):
         warnings.warn("AD for svd: nonzero derivative for the arbitrary phase")
 
-    return vh_grad_v
 
-
-def calc_vh_grad_v_version_h(vh, grad_vh):
-    r"""Return :math:`v^\dagger \bar v` for AD; & check the diagonal terms."""
-
-    vh_grad_v = vh @ grad_vh.adjoint()
-
-    # check if the imaginary part of diagonal elements of vh_grad_v is 0
-    cond = torch.diagonal(vh_grad_v.imag, dim1=-2, dim2=-1).abs() > TOL
-    if torch.sum(cond):
-        warnings.warn("AD for svd: nonzero derivative for the arbitrary phase")
-
-    return vh_grad_v
-
-
-# =============================================================================
 def calc_nabla(s):
     """s is the list of singular values"""
     n = s.shape[-1]
