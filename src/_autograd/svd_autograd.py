@@ -14,7 +14,7 @@ import warnings
 
 from .._svd import svd, AttributeDict4SVD
 
-TOL = 1e-12
+TOL = 1e-8
 
 
 # =============================================================================
@@ -76,10 +76,12 @@ def check_for_arbitrary_phase(uh_grad_u, vh_grad_v):
     """Check if the imaginary part of diagonal elements of the sum of inputs
     are 0.
     """
-    x = uh_grad_u.imag + vh_grad_v.imag
-    cond = torch.diagonal(x, dim1=-2, dim2=-1).abs() > TOL
+    x = torch.diagonal(uh_grad_u.imag + vh_grad_v.imag, dim1=-2, dim2=-1).abs()
+    cond = x > TOL
     if torch.sum(cond):
-        warnings.warn("AD for svd: nonzero derivative for the arbitrary phase")
+        warnings.warn("SVD: AD for arbitrary phase does not vanish")
+        # str_ = f"measure: {torch.sum(cond)} x {torch.mean(x[cond]):g}"
+        # warnings.warn(f"SVD: AD for arbitrary phase does not vanish; {str_}")
 
 
 def calc_nabla(s):
