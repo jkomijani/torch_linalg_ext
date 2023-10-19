@@ -8,3 +8,4 @@ eigh = eig_autograd.Eigh.apply
 eigu = eig_autograd.Eigu.apply
 
 svd = svd_autograd.SVD.apply_wrapper
+svd_with_simplified_ad = svd_autograd.ADSimplifiedSVD.apply_wrapper

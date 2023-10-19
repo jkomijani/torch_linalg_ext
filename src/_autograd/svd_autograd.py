@@ -72,6 +72,29 @@ class SVD(torch.autograd.Function):
 
 
 # =============================================================================
+class ADSimplifiedSVD(SVD):
+    r"""Similar to SVD except that its AD is simpler because it is assumed that
+    the dependence on U and Vh is only through combination of U @ Vh, which
+    is unique for non-vanishing singular values.
+    """
+
+    @staticmethod
+    def backward(ctx, grad_u, grad_s, grad_vh):
+        u, s, vh = ctx.saved_tensors
+
+        nabla_plus = calc_nabla_plus(s)
+
+        uh_grad_u = u.adjoint() @ grad_u
+
+        uh_grad_u_times2 = (uh_grad_u - uh_grad_u.adjoint())
+
+        grad_s = torch.diag_embed(grad_s)  # for matrix operations
+        grad_matrix = u @ (grad_s + nabla_plus * uh_grad_u_times2) @ vh
+
+        return grad_matrix
+
+
+# =============================================================================
 def check_for_arbitrary_phase(uh_grad_u, vh_grad_v):
     """Check if the imaginary part of diagonal elements of the sum of inputs
     are 0.
