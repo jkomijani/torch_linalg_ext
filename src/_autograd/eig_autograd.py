@@ -71,7 +71,7 @@ class InverseEig(torch.autograd.Function):
         grad_matrix = vecs.adjoint() @ grad_matrix @ vecs
 
         grad_vals = torch.linalg.diagonal(grad_matrix)
-        grad_vecs = calc_eig_delta(vals).conj() * grad_matrix
+        grad_vecs = vecs @ (calc_eig_delta(vals).conj() * grad_matrix)
 
         return grad_vals, grad_vecs
 
