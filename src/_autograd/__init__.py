@@ -6,6 +6,7 @@ from . import svd_autograd
 
 eigh = eig_autograd.Eigh.apply
 eigu = eig_autograd.Eigu.apply
+inverse_eig = eig_autograd.InverseEig.apply
 
 svd = svd_autograd.SVD.apply_wrapper
 svd_with_simplified_ad = svd_autograd.ADSimplifiedSVD.apply_wrapper
