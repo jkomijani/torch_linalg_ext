@@ -5,6 +5,7 @@ from ._autograd import eigu
 from ._autograd import inverse_eig
 from ._autograd import svd
 from ._autograd import svd_with_simplified_ad
+from ._autograd import reciprocal
 
 
 # functions from functions **reliably** support algorithmic differentiation
