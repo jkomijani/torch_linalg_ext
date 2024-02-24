@@ -13,14 +13,16 @@ packages = [
         'torch_linalg_ext',
         'torch_linalg_ext._autograd',
         'torch_linalg_ext._eig',
-        'torch_linalg_ext._svd'
+        'torch_linalg_ext._svd',
+        'torch_linalg_ext.functions'
         ]
 
 package_dir = {
         'torch_linalg_ext': 'src',
         'torch_linalg_ext._autograd': 'src/_autograd',
         'torch_linalg_ext._eig': 'src/_eig',
-        'torch_linalg_ext._svd': 'src/_svd'
+        'torch_linalg_ext._svd': 'src/_svd',
+        'torch_linalg_ext.functions': 'src/functions'
         }
 
 setup(name='torch_linalg_ext',
