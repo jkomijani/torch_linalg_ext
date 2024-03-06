@@ -15,6 +15,7 @@ import warnings
 from .._svd import svd, AttributeDict4SVD
 
 TOL = 1e-8
+CHECK_ARBITRARY_PHASE = False
 
 
 # =============================================================================
@@ -56,7 +57,8 @@ class SVD(torch.autograd.Function):
         uh_grad_u = u.adjoint() @ grad_u
         vh_grad_v = vh @ grad_vh.adjoint()
 
-        check_for_arbitrary_phase(uh_grad_u, vh_grad_v)
+        if CHECK_ARBITRARY_PHASE:
+            check_for_arbitrary_phase(uh_grad_u, vh_grad_v)
 
         uh_grad_u = (uh_grad_u - uh_grad_u.adjoint()) / 2
         vh_grad_v = (vh_grad_v - vh_grad_v.adjoint()) / 2

@@ -15,6 +15,7 @@ import warnings
 from .._eig import eigh, eigu
 
 TOL = 1e-12
+CHECK_ARBITRARY_PHASE = False
 
 
 # =============================================================================
@@ -155,10 +156,11 @@ def calc_vh_grad_v(v, grad_v):
 
     vh_grad_v = v.adjoint() @ grad_v
 
-    # check if the imaginary part of diagonal elements of vh_grad_v is 0
-    cond = torch.diagonal(vh_grad_v.imag, dim1=-2, dim2=-1).abs() > TOL
-    if torch.sum(cond):
-        warnings.warn("AD for eig: nonzero derivative for the arbitrary phase")
+    if CHECK_ARBITRARY_PHASE:
+        # check if the imaginary part of diagonal elements of vh_grad_v is 0
+        cond = torch.diagonal(vh_grad_v.imag, dim1=-2, dim2=-1).abs() > TOL
+        if torch.sum(cond):
+            warnings.warn("AD for eig: nonzero derivative for arbitrary phase")
 
     return vh_grad_v
 
