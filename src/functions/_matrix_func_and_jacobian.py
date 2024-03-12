@@ -10,7 +10,7 @@ from torch_linalg_ext import eigh, eigu, inverse_eig, reciprocal
 # =============================================================================
 class MatrixFunctionTemplate(ABC):
     r"""A template class for handling a matrix transformation as :math:`f(M)`,
-    where the input matrix i:math:`M` is supposed to be diagonalizable.
+    where the matrix :math:`M` is supposed to be diagonalizable.
 
     Exploiting the spectral decomposition of :math:`H`, we have
 
@@ -72,7 +72,7 @@ class MatrixAngleU(MatrixFunctionTemplate):
 
     def scalar_func(self, u):
         h = torch.angle(u)
-        return h, - 1j * u.conj()
+        return h, -1j * u.conj()
 
 
 # =============================================================================

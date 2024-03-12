@@ -10,7 +10,7 @@ from torch_linalg_ext import eigh, eigu, inverse_eig
 # =============================================================================
 class MatrixFunctionTemplate(ABC):
     r"""A template class for handling a matrix transformation as :math:`f(M)`,
-    where the input matrix i:math:`M` is supposed to be diagonalizable.
+    where the matrix :math:`M` is supposed to be diagonalizable.
 
     Exploiting the spectral decomposition of :math:`H`, we have
 
@@ -28,7 +28,7 @@ class MatrixFunctionTemplate(ABC):
     :math:`d\Gamma = \Omega^\dagger d\Omega`, which is anti-Herimtian matrix.
 
     Any subclass should have a method called `scalar_func` for transforming the
-    eigenvalues, which also returns the derivative of the function.
+    eigenvalues.
     """
 
     forward_mode_eig = torch.linalg.eig
@@ -38,7 +38,7 @@ class MatrixFunctionTemplate(ABC):
 
     def forward(self, matrix):
         vals, vecs = self.forward_mode_eig(matrix)
-        f_vals, f_prime = self.scalar_func(vals)
+        f_vals = self.scalar_func(vals)
         matrix = inverse_eig(f_vals, vecs)
         return matrix
 
@@ -54,7 +54,7 @@ class MatrixExp1jh(MatrixFunctionTemplate):
 
     def scalar_func(self, h):
         u = torch.exp(1j * h)
-        return u, 1j * u
+        return u
 
 
 class MatrixAngleU(MatrixFunctionTemplate):
@@ -64,7 +64,7 @@ class MatrixAngleU(MatrixFunctionTemplate):
 
     def scalar_func(self, u):
         h = torch.angle(u)
-        return h, - 1j * u.conj()
+        return h
 
 
 # =============================================================================
