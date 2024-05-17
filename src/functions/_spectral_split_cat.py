@@ -36,6 +36,7 @@ def spectral_split(x, *, dims, spectral_scale=None, as_nested=False):
         x_tilde = fftn(x, dim=dims) * spectral_scale
 
     split = Splitter.apply
+
     if torch.is_complex(x):
         blocks = [ifftn(blk, dim=dims) for blk in split(dims, x_tilde)]
     else:
@@ -47,15 +48,50 @@ def spectral_split(x, *, dims, spectral_scale=None, as_nested=False):
     return blocks
 
 
-# =============================================================================
 def spectral_cat(blocks, *, dims, spectral_scale=None, as_nested=False):
     """Reverse of spectral_split"""
 
     if as_nested:
         blocks = unpack(blocks, len(dims))
 
-    cat = Concatenator.apply
-    x_tilde = cat(dims, *[fftn(blk, dim=dims) for blk in blocks])
+    x_tilde = \
+            Concatenator.apply(dims, *[fftn(blk, dim=dims) for blk in blocks])
+
+    if spectral_scale is None:
+        x = ifftn(x_tilde, dim=dims)
+    else:
+        x = ifftn(x_tilde / spectral_scale, dim=dims)
+
+    if not torch.is_complex(blocks[0]):
+        x = x.real
+
+    return x
+
+
+# =============================================================================
+def splitted_fftn(x, *, dims, spectral_scale=None, as_nested=False):
+    """Similar to ``spectal_split``, except the blocks are in Fourier space."""
+
+    if spectral_scale is None:
+        x_tilde = fftn(x, dim=dims)
+    else:
+        x_tilde = fftn(x, dim=dims) * spectral_scale
+
+    blocks = Splitter.apply(dims, x_tilde)
+
+    if as_nested:
+        blocks = pack_as_nested(blocks)
+
+    return blocks
+
+
+def splitted_ifftn(blocks, *, dims, spectral_scale=None, as_nested=False):
+    """Reverse of splitted_ifftn"""
+
+    if as_nested:
+        blocks = unpack(blocks, len(dims))
+
+    x_tilde = Concatenator.apply(dims, *blocks)
 
     if spectral_scale is None:
         x = ifftn(x_tilde, dim=dims)
@@ -90,6 +126,7 @@ class Splitter(torch.autograd.Function):
 
         def splitcat(x_tilde_n, axis):
             ell = x_tilde_n.shape[axis]
+            assert ell > 3, f"{axis} axis is too small to be splitted"
             cut = ell // 4
             splt = torch.split(x_tilde_n, [cut, ell - 2 * cut, cut], dim=axis)
             return torch.cat([splt[0], splt[2]], dim=axis), splt[1]
@@ -115,7 +152,6 @@ class Splitter(torch.autograd.Function):
         return grad_dims, grad_x_tilde
 
 
-# =============================================================================
 class Concatenator(torch.autograd.Function):
 
     @staticmethod
@@ -197,14 +233,15 @@ def makesure_tensor(dims):
         return torch.tensor(dims)
 
 
-def conjugate_counterpart(x):
+def conjugate_counterpart(x, dims=None):
     """Return ``x[:, -i_1, -i_2, ..., -i_n]``.
 
     Note that the FFT of a real signal is Hermitian-symmetric as
     ``x[:, -i_1, -i_2, ..., -i_n] = conj(x[:, i_1, i_2, ..., i_n])``.
     """
-    dims = tuple(range(1, x.ndim))
-    return torch.flip(torch.roll(x, [-1] * (x.ndim - 1), dims=dims), dims=dims)
+    if dims is None:
+        dims = tuple(range(1, x.ndim))
+    return torch.flip(torch.roll(x, [-1] * len(dims), dims=dims), dims=dims)
 
 
 def pack_as_nested(blocks):
@@ -223,23 +260,48 @@ def unpack(nested, depth):
 
 
 # =============================================================================
-def gradcheck(*, shape, dims):
+def gradcheck(*, shape, dims, complex_input=False):
+    """For sanity check of the implemented backward propagations.
+    For example use:
+        >>> gradcheck(shape=(2, 8, 3, 9), dims=(1, 3))
+    """
 
     torch.set_default_dtype(torch.float64)  # double precision
-    torch.manual_seed(213)
+
     scale = torch.randn(*shape)
-    scale = (scale + conjugate_counterpart(scale)) / 2.
+    if not complex_input:
+        # then, scale must be Hermitian-symmetric
+        scale = (scale + conjugate_counterpart(scale, dims=dims)) / 2.
 
     split = lambda x: spectral_split(x, dims=dims, spectral_scale=scale)
     cat = lambda *blocks: spectral_cat(blocks, dims=dims, spectral_scale=scale)
 
-    x = torch.randn(*shape) + 1j * torch.randn(*shape)
+    if complex_input:
+        x = torch.randn(*shape) + 1j * torch.randn(*shape)
+    else:
+        x = torch.randn(*shape)
     x.requires_grad = True
     blocks = split(x)
 
+    print("spectral_cat(spectral_split(.)) == Identity:", end='\t')
     x_hat = spectral_cat(blocks, dims=dims, spectral_scale=scale)
-    delta = torch.sum((x_hat - x).abs())
-    print("cat(split(.)) is Identity:", delta < 1e-12, f"[{delta:g} < 1e-12]")
+    print(torch.mean((x_hat - x).abs()).item() < 1e-13)
 
-    print("gradcheck, split:", torch.autograd.gradcheck(split, x))
-    print("gradcheck, cat:", torch.autograd.gradcheck(cat, blocks))
+    print("gradcheck(spectral_split):", end='\t')
+    print(torch.autograd.gradcheck(split, x))
+    print("gradcheck(spectral_cat):", end='\t')
+    print(torch.autograd.gradcheck(cat, blocks))
+
+    fftn = lambda x: splitted_fftn(x, dims=dims, spectral_scale=scale)
+    ifftn = lambda *blks: splitted_ifftn(blks, dims=dims, spectral_scale=scale)
+
+    blocks = fftn(x)
+
+    print("splitted_ifftn(splitted_fftn(.)) == Identity:", end='\t')
+    x_hat = splitted_ifftn(blocks, dims=dims, spectral_scale=scale)
+    print(torch.mean((x_hat - x).abs()).item() < 1e-13)
+
+    print("gradcheck(splitted_fftn):", end='\t')
+    print(torch.autograd.gradcheck(fftn, x))
+    print("gradcheck(splitted_ifftn):", end='\t')
+    print(torch.autograd.gradcheck(ifftn, blocks))

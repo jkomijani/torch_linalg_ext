@@ -1,5 +1,7 @@
 from ._spectral_split_cat import spectral_split
 from ._spectral_split_cat import spectral_cat
+from ._spectral_split_cat import splitted_fftn
+from ._spectral_split_cat import splitted_ifftn
 
 from ._matrix_func import kronecker_product
 from ._matrix_func import eyes_like
