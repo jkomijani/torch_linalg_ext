@@ -7,17 +7,20 @@ ifftn, fftn = torch.fft.ifftn, torch.fft.fftn
 
 
 # =============================================================================
-def spectral_split(x, *, dims, spectral_scale=None, as_nested=False):
+def spectral_split(x, *, dims,
+        spectral_scale=None, symmetric_norm=True, as_nested=False
+        ):
     """
     Computes multi dimensional FFT of input tensor, along the specified
     dimensions, divides the spectrum in two pieces along each of those
     dimensions, performs the multi dimenstional inverse FFT of each block,
-    and returns all blocks as a list. 
+    and returns all blocks as a list. A symmetric normalization factor for both
+    FFT and its inverse are assumed by default (unlike torch convention).
 
     Paramerers
     ----------
     x : Tensor
-        the input tensor
+        the input tensor.
     dims : Tuple[int]
         dimensions to be transformed.
     spectral_scale : Tensor or number, optional
@@ -27,13 +30,23 @@ def spectral_split(x, *, dims, spectral_scale=None, as_nested=False):
         be arbitrary; it must be Hermitian-symmetric like the FFT of ``x``,
         otherwise ``spectral_cat`` and ``spectral_split`` are not each others
         inverse. (To this end, one can use ``conjugate_counterpart`` function.)
+    symmetric_norm : Boolean, optional
+        when True/False, symmetric/torch conventions for normalization are
+        employed (Default is True).
     as_nested : Boolean, optional
         if True the output is organized as nested lists. (Default is False.)
     """
-    if spectral_scale is None:
+
+    if symmetric_norm:
+        norm = 2 ** (-len(dims) / 2)
+        scale = norm * (1 if spectral_scale is None else spectral_scale)
+    else:
+        scale = spectral_scale
+
+    if scale is None:
         x_tilde = fftn(x, dim=dims)
     else:
-        x_tilde = fftn(x, dim=dims) * spectral_scale
+        x_tilde = fftn(x, dim=dims) * scale
 
     split = Splitter.apply
 
@@ -48,7 +61,9 @@ def spectral_split(x, *, dims, spectral_scale=None, as_nested=False):
     return blocks
 
 
-def spectral_cat(blocks, *, dims, spectral_scale=None, as_nested=False):
+def spectral_cat(blocks, *, dims,
+        spectral_scale=None, symmetric_norm=True, as_nested=False
+        ):
     """Reverse of spectral_split"""
 
     if as_nested:
@@ -57,10 +72,16 @@ def spectral_cat(blocks, *, dims, spectral_scale=None, as_nested=False):
     x_tilde = \
             Concatenator.apply(dims, *[fftn(blk, dim=dims) for blk in blocks])
 
-    if spectral_scale is None:
+    if symmetric_norm:
+        norm = 2 ** (-len(dims) / 2)
+        scale = norm * (1 if spectral_scale is None else spectral_scale)
+    else:
+        scale = spectral_scale
+
+    if scale is None:
         x = ifftn(x_tilde, dim=dims)
     else:
-        x = ifftn(x_tilde / spectral_scale, dim=dims)
+        x = ifftn(x_tilde / scale, dim=dims)
 
     if not torch.is_complex(blocks[0]):
         x = x.real
@@ -69,13 +90,23 @@ def spectral_cat(blocks, *, dims, spectral_scale=None, as_nested=False):
 
 
 # =============================================================================
-def splitted_fftn(x, *, dims, spectral_scale=None, as_nested=False):
-    """Similar to ``spectal_split``, except the blocks are in Fourier space."""
+def splitted_fftn(x, *, dims,
+        spectral_scale=None, symmetric_norm=False, as_nested=False
+        ):
+    """Similar to ``spectal_split``, except the returned blocks are in Fourier
+    space and the default value of ``symmetric_norm`` is set to False.
+    """
 
-    if spectral_scale is None:
+    if symmetric_norm:
+        norm = 2 ** (-len(dims) / 2)
+        scale = norm * (1 if spectral_scale is None else spectral_scale)
+    else:
+        scale = spectral_scale
+
+    if scale is None:
         x_tilde = fftn(x, dim=dims)
     else:
-        x_tilde = fftn(x, dim=dims) * spectral_scale
+        x_tilde = fftn(x, dim=dims) * scale
 
     blocks = Splitter.apply(dims, x_tilde)
 
@@ -85,7 +116,9 @@ def splitted_fftn(x, *, dims, spectral_scale=None, as_nested=False):
     return blocks
 
 
-def splitted_ifftn(blocks, *, dims, spectral_scale=None, as_nested=False):
+def splitted_ifftn(blocks, *, dims,
+        spectral_scale=None, symmetric_norm=False, as_nested=False
+        ):
     """Reverse of splitted_ifftn"""
 
     if as_nested:
@@ -93,10 +126,17 @@ def splitted_ifftn(blocks, *, dims, spectral_scale=None, as_nested=False):
 
     x_tilde = Concatenator.apply(dims, *blocks)
 
-    if spectral_scale is None:
+    if symmetric_norm:
+        norm = 2 ** (-len(dims) / 2)
+        scale = norm * (1 if spectral_scale is None else spectral_scale)
+    else:
+        scale = spectral_scale
+
+    if scale is None:
         x = ifftn(x_tilde, dim=dims)
     else:
-        x = ifftn(x_tilde / spectral_scale, dim=dims)
+        x = ifftn(x_tilde / scale, dim=dims)
+
 
     return x
 
