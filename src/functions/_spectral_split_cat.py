@@ -64,7 +64,7 @@ def spectral_split(x, *, dims,
 def spectral_cat(blocks, *, dims,
         spectral_scale=None, symmetric_norm=True, as_nested=False
         ):
-    """Reverse of spectral_split"""
+    """Reverse of spectral_split."""
 
     if as_nested:
         blocks = unpack(blocks, len(dims))
@@ -119,7 +119,7 @@ def splitted_fftn(x, *, dims,
 def splitted_ifftn(blocks, *, dims,
         spectral_scale=None, symmetric_norm=False, as_nested=False
         ):
-    """Reverse of splitted_ifftn"""
+    """Reverse of splitted_ifftn."""
 
     if as_nested:
         blocks = unpack(blocks, len(dims))
@@ -143,7 +143,11 @@ def splitted_ifftn(blocks, *, dims,
 
 # =============================================================================
 class Splitter(torch.autograd.Function):
-    """Manipulate the input for RFFT partitioning"""
+    """Given data in the Fourier domain, splits it to low and hight frequency
+    blocks. The blocks have a particular property that is useful if the
+    original data in the Physical domain are real: the inverse Fourier
+    transform of each block is real too.
+    """
 
     @staticmethod
     def forward(ctx, dims, x_tilde):
