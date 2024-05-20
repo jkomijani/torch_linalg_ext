@@ -8,7 +8,7 @@ ifftn, fftn = torch.fft.ifftn, torch.fft.fftn
 
 # =============================================================================
 def spectral_split(x, *, cuts, dims,
-        spectral_scale=None, symmetric_norm=True, as_nested=False
+        norm=None, spectral_scale=None, as_nested=False
         ):
     """
     Computes multi dimensional FFT of input tensor, along the specified
@@ -27,6 +27,8 @@ def spectral_split(x, *, cuts, dims,
         the middle frequency.
     dims : Tuple[int]
         dimensions to be splitted.
+    norm : str, optional
+        As described in torch.fft.fftn.
     spectral_scale : Tensor or number, optional
         if provided, the FFT of the input tensor gets scaled accordingly
         before getting splitted. (Default is None.)
@@ -34,30 +36,21 @@ def spectral_split(x, *, cuts, dims,
         be arbitrary; it must be Hermitian-symmetric like the FFT of ``x``,
         otherwise ``spectral_cat`` and ``spectral_split`` are not each others
         inverse. (To this end, one can use ``conjugate_counterpart`` function.)
-    symmetric_norm : Boolean, optional
-        when True/False, symmetric/torch conventions for normalization are
-        employed (Default is True).
     as_nested : Boolean, optional
         if True the output is organized as nested lists. (Default is False.)
     """
 
-    if symmetric_norm:
-        norm = 2 ** (-len(dims) / 2)
-        scale = norm * (1 if spectral_scale is None else spectral_scale)
+    if spectral_scale is None:
+        x_tilde = fftn(x, dim=dims, norm=norm)
     else:
-        scale = spectral_scale
+        x_tilde = fftn(x, dim=dims, norm=norm) * spectral_scale
 
-    if scale is None:
-        x_tilde = fftn(x, dim=dims)
-    else:
-        x_tilde = fftn(x, dim=dims) * scale
-
-    split = lambda x_tilde: Splitter.apply(dims, cuts, x_tilde)
+    blocks = Splitter.apply(dims, cuts, x_tilde)
 
     if torch.is_complex(x):
-        blocks = [ifftn(blk, dim=dims) for blk in split(x_tilde)]
+        blocks = [ifftn(blk, dim=dims, norm=norm) for blk in blocks]
     else:
-        blocks = [ifftn(blk, dim=dims).real for blk in split(x_tilde)]
+        blocks = [ifftn(blk, dim=dims, norm=norm).real for blk in blocks]
 
     if as_nested:
         blocks = pack_as_nested(blocks)
@@ -66,7 +59,7 @@ def spectral_split(x, *, cuts, dims,
 
 
 def spectral_cat(blocks, *, cuts, dims,
-        spectral_scale=None, symmetric_norm=True, as_nested=False
+        norm=None, spectral_scale=None, as_nested=False
         ):
     """Reverse of spectral_split."""
 
@@ -77,19 +70,13 @@ def spectral_cat(blocks, *, cuts, dims,
         cuts = [0] * len(dims)
 
     x_tilde = Concatenator.apply(
-            dims, cuts, *[fftn(blk, dim=dims) for blk in blocks]
+            dims, cuts, *[fftn(blk, dim=dims, norm=norm) for blk in blocks]
             )
 
-    if symmetric_norm:
-        norm = 2 ** (-len(dims) / 2)
-        scale = norm * (1 if spectral_scale is None else spectral_scale)
+    if spectral_scale is None:
+        x = ifftn(x_tilde, dim=dims, norm=norm)
     else:
-        scale = spectral_scale
-
-    if scale is None:
-        x = ifftn(x_tilde, dim=dims)
-    else:
-        x = ifftn(x_tilde / scale, dim=dims)
+        x = ifftn(x_tilde / spectral_scale, dim=dims, norm=norm)
 
     if not torch.is_complex(blocks[0]):
         x = x.real
@@ -99,22 +86,14 @@ def spectral_cat(blocks, *, cuts, dims,
 
 # =============================================================================
 def splitted_fftn(x, *, cuts, dims,
-        spectral_scale=None, symmetric_norm=False, as_nested=False
+        norm=None, spectral_scale=None, as_nested=False
         ):
-    """Similar to ``spectal_split``, except the returned blocks are in Fourier
-    space and the default value of ``symmetric_norm`` is set to False.
-    """
+    """Similar to ``spectal_split``, but the blocks are in Fourier space."""
 
-    if symmetric_norm:
-        norm = 2 ** (-len(dims) / 2)
-        scale = norm * (1 if spectral_scale is None else spectral_scale)
+    if spectral_scale is None:
+        x_tilde = fftn(x, dim=dims, norm=norm)
     else:
-        scale = spectral_scale
-
-    if scale is None:
-        x_tilde = fftn(x, dim=dims)
-    else:
-        x_tilde = fftn(x, dim=dims) * scale
+        x_tilde = fftn(x, dim=dims, norm=norm) * spectral_scale
 
     blocks = list(Splitter.apply(dims, cuts, x_tilde))
 
@@ -125,7 +104,7 @@ def splitted_fftn(x, *, cuts, dims,
 
 
 def splitted_ifftn(blocks, *, cuts, dims,
-        spectral_scale=None, symmetric_norm=False, as_nested=False
+        norm=None, spectral_scale=None, as_nested=False
         ):
     """Reverse of splitted_ifftn."""
 
@@ -134,16 +113,10 @@ def splitted_ifftn(blocks, *, cuts, dims,
 
     x_tilde = Concatenator.apply(dims, cuts, *blocks)
 
-    if symmetric_norm:
-        norm = 2 ** (-len(dims) / 2)
-        scale = norm * (1 if spectral_scale is None else spectral_scale)
+    if spectral_scale is None:
+        x = ifftn(x_tilde, dim=dims, norm=norm)
     else:
-        scale = spectral_scale
-
-    if scale is None:
-        x = ifftn(x_tilde, dim=dims)
-    else:
-        x = ifftn(x_tilde / scale, dim=dims)
+        x = ifftn(x_tilde / spectral_scale, dim=dims, norm=norm)
 
     return x
 
@@ -279,31 +252,6 @@ class Concatenator(torch.autograd.Function):
         grad_dims, grad_cuts = None, None
         grad_blocks = Splitter.forward(None, dims, cuts, grad_x_tilde)
         return (grad_dims, grad_cuts, *grad_blocks)
-
-
-# ONE CAN USE FOLLOWING FOR *** rfft ***, BUT BACKWARD PROPAGATION OF
-# DERIVATIVES WORKS WITH A STRANGE COMBINATION OF COEEFFICIENTS, INDICATING I
-# AM NOT SURE HOW PYTORCH HANDLES THEM.
-#
-# def take_care_rfft_axis(x_tilde_n):
-#     cut = (x_tilde_n.shape[-1] - 1) // 2
-#     x_inds1 = x_tilde_n[..., cut]
-#     x_inds3 = conjugate_counterpart(x_inds1).conj()
-#     x_inds1, x_inds3 = (
-#             (x_inds1 + x_inds3) * 0.5,
-#             (x_inds1 - x_inds3) * (1j * 0.5)
-#             )
-#     return (
-#         torch.cat([x_tilde_n[..., :cut], x_inds3.unsqueeze(-1)], dim=-1),
-#         torch.cat([x_inds1.unsqueeze(-1), x_tilde_n[..., cut+1:]], dim=-1)
-#         )
-#
-# def undo_take_care_rfft_axis(splt_0, splt_1):
-#     x_inds1 = (splt_1[..., 0] - 1j * splt_0[..., -1])
-#     return torch.cat(
-#             [splt_0[..., :-1], x_inds1.unsqueeze(-1), splt_1[..., 1:]],
-#             dim=-1
-#            )
 
 
 # =============================================================================
