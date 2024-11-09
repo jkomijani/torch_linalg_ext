@@ -4,7 +4,7 @@ import torch
 
 from abc import abstractmethod, ABC
 
-from torch_linalg_ext import eigh, eigu, inverse_eig
+from torch_linalg_ext import eigh, eigu, inverse_eign
 
 
 # =============================================================================
@@ -39,7 +39,7 @@ class MatrixFunctionTemplate(ABC):
     def forward(self, matrix):
         vals, vecs = self.forward_mode_eig(matrix)
         f_vals = self.scalar_func(vals)
-        matrix = inverse_eig(f_vals, vecs)
+        matrix = inverse_eign(f_vals, vecs)
         return matrix
 
     @abstractmethod

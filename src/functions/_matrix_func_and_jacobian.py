@@ -4,7 +4,7 @@ import torch
 
 from abc import abstractmethod, ABC
 
-from torch_linalg_ext import eigh, eigu, inverse_eig, reciprocal
+from torch_linalg_ext import eigh, eigu, inverse_eign, reciprocal
 
 
 # =============================================================================
@@ -39,7 +39,7 @@ class MatrixFunctionTemplate(ABC):
     def forward(self, matrix):
         vals, vecs = self.forward_mode_eig(matrix)
         f_vals, f_prime = self.scalar_func(vals)
-        matrix = inverse_eig(f_vals, vecs)
+        matrix = inverse_eign(f_vals, vecs)
         return matrix, self.calc_jacobian_matrix(vals, vecs, f_vals, f_prime)
 
     def calc_jacobian_matrix(self, eigvals, eigvecs, f_eigvals, f_prime):
@@ -76,7 +76,7 @@ class MatrixAngleU(MatrixFunctionTemplate):
 
 
 # =============================================================================
-def inverse_eig_and_jacobian(eigvals, eigvecs, mode='Gamma'):
+def inverse_eign_and_jacobian(eigvals, eigvecs, mode='Gamma'):
     """
     For calculating :math:`\Omega \Lambda \Omega^\dagger`, where the modal
     matrix is untiary and the spectral matrix is diagonal.
@@ -97,7 +97,7 @@ def inverse_eig_and_jacobian(eigvals, eigvecs, mode='Gamma'):
     in formet one the eigenvalues do not vary and the latter one the redundnacy
     is not fixed.
     """
-    matrix = inverse_eig(eigvals, eigvecs)
+    matrix = inverse_eign(eigvals, eigvecs)
     delta = calc_eig_delta(eigvals)
     eye = eyes_like(delta)
     jac2 = kronecker_product(eigvecs, eigvecs.conj())
