@@ -19,25 +19,51 @@ CHECK_ARBITRARY_PHASE = False
 
 
 # =============================================================================
-class Eig(torch.autograd.Function):
-    r"""
-    For more details see
-    "An extended collection of matrix derivative results for forward and
-    reverse mode algorithmic differentiation."
-    We follow the notation introduced in the above reference as
-    "We consider a computation which begins with a single scalar input variable
-    :math:`s_i` and eventually, through a sequence of calculations, computes a
-    single scalar output :math:`s_o` . Using standard automatic differentiation
-    (AD) terminology, if :math:`A` is a matrix which is an intermediate
-    variable within the computation, then
-    1. :math:`\dot A` denotes the derivative of A with respect to s_i
-    2. :math:`\bar A` denotes the derivative of s_o w.r.t each element of A.
+class NormalMatrixEig(torch.autograd.Function):
+    r"""A class designed to compute the eigenvalues and eigenvectors of normal
+    matrices, with support for reverse-mode algorithmic differentiation.
 
-    https://pytorch.org/docs/stable/autograd.html#torch.autograd.Function
+    Description:
+    ------------
+    This class is specifically intended for matrices that are *normal*, meaning
+    they commute with their conjugate transpose. This property ensures that the
+    matrix is unitarily diagonalizable, making it possible to compute its
+    eigenvalues and eigenvectors more efficiently and accurately.
+
+    In the context of reverse-mode algorithmic differentiation, normal matrices
+    have the advantage that we can use adjoint (Hermitian transpose) operations
+    rather than matrix inversions. By avoiding the need for an explicit inverse
+    of the eigenvector matrix, this approach improves numerical stability and
+    computational efficiency, especially for large matrices.
+
+    For more details on algorithmic differentiation see
+
+        "An extended collection of matrix derivative results for forward and
+         reverse mode algorithmic differentiation."
+
+    We follow the notation introduced in the above reference. In particular:
+
+        We consider a computation which begins with a single scalar input
+        variable :math:`s_i` and eventually, through a sequence of calculations,
+        computes a single scalar output :math:`s_o` . Using standard automatic
+        differentiation (AD) terminology, if :math:`A` is a matrix which is an
+        intermediate variable within the computation, then
+
+
+        1. :math:`\dot A` denotes the derivative of A with respect to s_i
+        2. :math:`\bar A` denotes the derivative of s_o w.r.t each element of A
+
+
+    For implementing AD, see
+
+        https://pytorch.org/docs/stable/autograd.html#torch.autograd.Function
     """
 
     @staticmethod
     def forward(ctx, matrix):
+        """Computes the eigenvalues and eigenvectors of the input normal matrix
+        and provides gradients using reverse-mode differentiation.
+        """
         u, v = torch.linalg.eig(matrix)
         ctx.save_for_backward(u, v)
         return u, v
@@ -56,10 +82,15 @@ class Eig(torch.autograd.Function):
         return grad_matrix
 
 
+Eign = NormalMatrixEig  # alias
+
+Eig = NormalMatrixEig  # alias for legacy
+
+
 class InverseEign(torch.autograd.Function):
     """A class to reconstruct a matrix from a given set of eigenvalues and
     eigenvectors, effectively inverting the decomposition performed by the
-    `Eig` class for *normal* matrices.
+    `NormalMatrixEig` class (or simular classes) for normal matrices.
     """
 
     @staticmethod
@@ -83,7 +114,7 @@ class InverseEign(torch.autograd.Function):
 
 # =============================================================================
 class Eigh(torch.autograd.Function):
-    """Similar to Eig, but specialized for Hermitian matrices."""
+    """Similar to `NormalMatrixEig`, but specialized for Hermitian matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
@@ -108,7 +139,7 @@ class Eigh(torch.autograd.Function):
 
 # =============================================================================
 class Eigu(torch.autograd.Function):
-    """Similar to Eig, but specialized for unitary matrices."""
+    """Similar to `NormalMatrixEig`, but specialized for unitary matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
@@ -135,7 +166,7 @@ class Eigu(torch.autograd.Function):
 
 # =============================================================================
 class NaiveEigh(Eig):  # just for test
-    """Similar to Eigh, but AD is not specialized for Hermitian matrices."""
+    """Similar to `Eigh`, but AD is not specialized for Hermitian matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
@@ -145,7 +176,7 @@ class NaiveEigh(Eig):  # just for test
 
 
 class NaiveEigu(Eig):  # just for test
-    """Similar to Eigu, but AD is not specialized for unitary matrices."""
+    """Similar to `Eigu`, but AD is not specialized for unitary matrices."""
 
     @staticmethod
     def forward(ctx, matrix):
