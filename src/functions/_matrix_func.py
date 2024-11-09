@@ -10,7 +10,7 @@ from torch_linalg_ext import eigh, eigu, inverse_eign
 # =============================================================================
 class MatrixFunctionTemplate(ABC):
     r"""A template class for handling a matrix transformation as :math:`f(M)`,
-    where the matrix :math:`M` is supposed to be diagonalizable.
+    where the matrix :math:`M` is supposed to be normal.
 
     Exploiting the spectral decomposition of :math:`H`, we have
 
