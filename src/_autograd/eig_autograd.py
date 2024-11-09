@@ -56,7 +56,11 @@ class Eig(torch.autograd.Function):
         return grad_matrix
 
 
-class InverseEig(torch.autograd.Function):
+class InverseEign(torch.autograd.Function):
+    """A class to reconstruct a matrix from a given set of eigenvalues and
+    eigenvectors, effectively inverting the decomposition performed by the
+    `Eig` class for *normal* matrices.
+    """
 
     @staticmethod
     def forward(ctx, vals, vecs):
